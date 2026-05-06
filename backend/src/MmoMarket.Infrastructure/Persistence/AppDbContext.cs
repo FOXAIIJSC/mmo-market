@@ -20,7 +20,9 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<Review> Reviews => Set<Review>();
     public DbSet<WalletTxn> WalletTxns => Set<WalletTxn>();
     public DbSet<Dispute> Disputes => Set<Dispute>();
+    public DbSet<DisputeMessage> DisputeMessages => Set<DisputeMessage>();
     public DbSet<KycSubmission> KycSubmissions => Set<KycSubmission>();
+    public DbSet<WithdrawRequest> WithdrawRequests => Set<WithdrawRequest>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -92,6 +94,18 @@ public class AppDbContext : DbContext, IAppDbContext
         {
             e.HasOne(x => x.Product).WithMany(p => p.InventoryItems).HasForeignKey(x => x.ProductId);
             e.HasIndex(x => x.ContentHash);
+        });
+
+        b.Entity<DisputeMessage>(e =>
+        {
+            e.HasOne(x => x.Dispute).WithMany().HasForeignKey(x => x.DisputeId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Author).WithMany().HasForeignKey(x => x.AuthorUserId);
+        });
+
+        b.Entity<WithdrawRequest>(e =>
+        {
+            e.Property(x => x.Amount).HasColumnType("decimal(18,2)");
+            e.HasOne(x => x.SellerUser).WithMany().HasForeignKey(x => x.SellerUserId);
         });
     }
 

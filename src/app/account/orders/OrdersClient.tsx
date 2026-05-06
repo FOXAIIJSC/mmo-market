@@ -1,14 +1,17 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Eye, AlertTriangle, Star, Loader2, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, Star, Loader2, CheckCircle2, X } from "lucide-react";
 import { OrderStatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/lib/AuthContext";
 import { apiFetch } from "@/lib/api";
-import type { ApiOrder } from "@/lib/apiTypes";
+import type { ApiOrder, ApiOrderLine } from "@/lib/apiTypes";
 import type { OrderStatus } from "@/lib/types";
 import { formatRelativeTime, formatVND } from "@/lib/format";
+
+type ReviewTarget = { orderId: string; line: ApiOrderLine };
+type DisputeTarget = { orderId: string; orderCode: string };
 
 const tabs = [
   { v: "", label: "Tất cả" },
@@ -37,6 +40,11 @@ export function OrdersClient() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [reviewTarget, setReviewTarget] = useState<ReviewTarget | null>(null);
+  const [disputeTarget, setDisputeTarget] = useState<DisputeTarget | null>(null);
+  const [reviewForm, setReviewForm] = useState({ rating: 5, comment: "" });
+  const [disputeForm, setDisputeForm] = useState({ title: "", body: "" });
+  const [modalBusy, setModalBusy] = useState(false);
 
   const reload = useCallback(async () => {
     if (!token) return;
@@ -78,6 +86,52 @@ export function OrdersClient() {
       setErr(e instanceof Error ? e.message : "Lỗi");
     } finally {
       setBusy(null);
+    }
+  };
+
+  const submitReview = async () => {
+    if (!token || !reviewTarget) return;
+    setModalBusy(true);
+    try {
+      await apiFetch("/api/reviews", {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          orderId: reviewTarget.orderId,
+          productId: reviewTarget.line.productId,
+          rating: reviewForm.rating,
+          comment: reviewForm.comment,
+        }),
+      });
+      setReviewTarget(null);
+      setReviewForm({ rating: 5, comment: "" });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Lỗi");
+    } finally {
+      setModalBusy(false);
+    }
+  };
+
+  const submitDispute = async () => {
+    if (!token || !disputeTarget) return;
+    setModalBusy(true);
+    try {
+      await apiFetch("/api/disputes", {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          orderId: disputeTarget.orderId,
+          title: disputeForm.title,
+          body: disputeForm.body,
+        }),
+      });
+      setDisputeTarget(null);
+      setDisputeForm({ title: "", body: "" });
+      await reload();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Lỗi");
+    } finally {
+      setModalBusy(false);
     }
   };
 
@@ -165,11 +219,16 @@ export function OrdersClient() {
                           {busy === o.id ? "Đang xử lý..." : "Thanh toán ngay"}
                         </Button>
                       )}
-                      {o.status === "Completed" && (
-                        <Button variant="soft" size="sm" leftIcon={<Star className="size-3.5" />}>Đánh giá</Button>
+                      {(o.status === "Completed" || o.status === "Delivered") && o.lines[0] && (
+                        <Button variant="soft" size="sm" leftIcon={<Star className="size-3.5" />} onClick={() => setReviewTarget({ orderId: o.id, line: o.lines[0] })}>Đánh giá</Button>
+                      )}
+                      {(o.status === "Delivered" || o.status === "Completed") && (
+                        <Button variant="outline" size="sm" leftIcon={<AlertTriangle className="size-3.5" />} onClick={() => setDisputeTarget({ orderId: o.id, orderCode: o.code })}>Mở khiếu nại</Button>
                       )}
                       {o.status === "Dispute" && (
-                        <Button variant="outline" size="sm" leftIcon={<AlertTriangle className="size-3.5" />}>Đang khiếu nại</Button>
+                        <Link href="/account/disputes">
+                          <Button variant="outline" size="sm" leftIcon={<AlertTriangle className="size-3.5" />}>Đang khiếu nại</Button>
+                        </Link>
                       )}
                     </div>
                   </div>
@@ -178,6 +237,71 @@ export function OrdersClient() {
             );
           })}
         </ul>
+      )}
+
+      {reviewTarget && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-border bg-bg-card p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-base font-bold text-text">Đánh giá sản phẩm</h3>
+                <p className="text-xs text-text-muted line-clamp-1 max-w-md">{reviewTarget.line.title}</p>
+              </div>
+              <button onClick={() => setReviewTarget(null)} className="text-text-muted hover:text-text"><X className="size-4" /></button>
+            </div>
+            <div className="mt-4 flex items-center gap-2">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button key={n} onClick={() => setReviewForm({ ...reviewForm, rating: n })} className={`size-9 rounded-md ${reviewForm.rating >= n ? "bg-warning/20 text-warning" : "bg-bg-elev text-text-dim"}`}>
+                  <Star className="mx-auto size-5" />
+                </button>
+              ))}
+              <span className="ml-2 text-sm font-bold text-text">{reviewForm.rating}/5</span>
+            </div>
+            <textarea
+              rows={4}
+              placeholder="Chia sẻ trải nghiệm của bạn..."
+              value={reviewForm.comment}
+              onChange={(e) => setReviewForm({ ...reviewForm, comment: e.target.value })}
+              className="mt-3 w-full rounded-lg border border-border bg-bg-elev p-3 text-sm text-text outline-none focus:border-brand"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setReviewTarget(null)}>Huỷ</Button>
+              <Button size="sm" disabled={modalBusy || !reviewForm.comment.trim()} onClick={submitReview}>{modalBusy ? "Đang gửi..." : "Gửi đánh giá"}</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {disputeTarget && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-border bg-bg-card p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-base font-bold text-text">Mở khiếu nại</h3>
+                <p className="text-xs text-text-muted">Đơn {disputeTarget.orderCode}</p>
+              </div>
+              <button onClick={() => setDisputeTarget(null)} className="text-text-muted hover:text-text"><X className="size-4" /></button>
+            </div>
+            <input
+              placeholder="Tiêu đề ngắn (vd: Tài khoản đã bị thay đổi)"
+              value={disputeForm.title}
+              onChange={(e) => setDisputeForm({ ...disputeForm, title: e.target.value })}
+              className="mt-4 h-10 w-full rounded-lg border border-border bg-bg-elev px-3 text-sm text-text outline-none focus:border-brand"
+            />
+            <textarea
+              rows={5}
+              placeholder="Mô tả chi tiết vấn đề..."
+              value={disputeForm.body}
+              onChange={(e) => setDisputeForm({ ...disputeForm, body: e.target.value })}
+              className="mt-3 w-full rounded-lg border border-border bg-bg-elev p-3 text-sm text-text outline-none focus:border-brand"
+            />
+            <p className="mt-2 text-xs text-text-muted">Khiếu nại sẽ giữ tiền escrow đến khi admin giải quyết.</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setDisputeTarget(null)}>Huỷ</Button>
+              <Button size="sm" variant="danger" disabled={modalBusy || !disputeForm.title.trim() || !disputeForm.body.trim()} onClick={submitDispute}>{modalBusy ? "Đang gửi..." : "Mở khiếu nại"}</Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -1,0 +1,60 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using MmoMarket.Application.Common;
+using MmoMarket.Application.Sellers;
+
+namespace MmoMarket.Api.Controllers;
+
+[ApiController]
+[Authorize(Roles = "Seller,Admin,SuperAdmin")]
+[Route("api/seller")]
+public class SellerController : ControllerBase
+{
+    private readonly SellerService _svc;
+    private readonly ICurrentUser _user;
+    public SellerController(SellerService svc, ICurrentUser user) { _svc = svc; _user = user; }
+
+    private Guid Uid => _user.UserId ?? throw new AppException("Unauthorized", 401);
+
+    [HttpGet("dashboard")]
+    public Task<SellerDashboardDto> Dashboard(CancellationToken ct) => _svc.GetDashboardAsync(Uid, ct);
+
+    [HttpGet("products")]
+    public Task<SellerProductDto[]> Products(CancellationToken ct) => _svc.ListMyProductsAsync(Uid, ct);
+
+    [HttpPost("products")]
+    public Task<SellerProductDto> Create([FromBody] SellerProductCreateDto dto, CancellationToken ct) => _svc.CreateProductAsync(Uid, dto, ct);
+
+    [HttpPut("products/{id:guid}")]
+    public Task<SellerProductDto> Update(Guid id, [FromBody] SellerProductUpdateDto dto, CancellationToken ct) => _svc.UpdateProductAsync(Uid, id, dto, ct);
+
+    [HttpDelete("products/{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    {
+        await _svc.DeleteProductAsync(Uid, id, ct);
+        return NoContent();
+    }
+
+    [HttpGet("orders")]
+    public Task<SellerOrderLineDto[]> Orders([FromQuery] string? status, CancellationToken ct) => _svc.ListMyOrdersAsync(Uid, status, ct);
+
+    public record DeliverDto(string[] Items);
+    [HttpPost("orders/{lineId:guid}/deliver")]
+    public Task<SellerOrderLineDto> Deliver(Guid lineId, [FromBody] DeliverDto dto, CancellationToken ct) => _svc.DeliverManualAsync(Uid, lineId, dto.Items, ct);
+
+    [HttpGet("inventory/{productId:guid}")]
+    public Task<SellerInventoryDto> Inventory(Guid productId, CancellationToken ct) => _svc.GetInventoryAsync(Uid, productId, ct);
+
+    [HttpPost("inventory/{productId:guid}/upload")]
+    public async Task<IActionResult> Upload(Guid productId, [FromBody] InventoryUploadDto dto, CancellationToken ct)
+    {
+        var added = await _svc.UploadInventoryAsync(Uid, productId, dto.Items, ct);
+        return Ok(new { added });
+    }
+
+    [HttpGet("withdraws")]
+    public Task<WithdrawDto[]> Withdraws(CancellationToken ct) => _svc.ListMyWithdrawsAsync(Uid, ct);
+
+    [HttpPost("withdraws")]
+    public Task<WithdrawDto> CreateWithdraw([FromBody] WithdrawCreateDto dto, CancellationToken ct) => _svc.CreateWithdrawAsync(Uid, dto, ct);
+}

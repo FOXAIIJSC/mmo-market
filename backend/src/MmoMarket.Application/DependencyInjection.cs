@@ -3,7 +3,9 @@ using MmoMarket.Application.Admin;
 using MmoMarket.Application.Auth;
 using MmoMarket.Application.Cart;
 using MmoMarket.Application.Catalog;
+using MmoMarket.Application.Disputes;
 using MmoMarket.Application.Orders;
+using MmoMarket.Application.Reviews;
 using MmoMarket.Application.Sellers;
 using MmoMarket.Application.Wallet;
 
@@ -19,6 +21,9 @@ public static class DependencyInjection
         services.AddScoped<OrderService>();
         services.AddScoped<WalletService>();
         services.AddScoped<KycService>();
+        services.AddScoped<SellerService>();
+        services.AddScoped<ReviewService>();
+        services.AddScoped<DisputeService>();
         services.AddScoped<AdminService>();
         return services;
     }

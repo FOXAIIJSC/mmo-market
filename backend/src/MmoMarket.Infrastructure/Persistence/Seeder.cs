@@ -11,6 +11,7 @@ public static class Seeder
     public static async Task SeedAsync(AppDbContext db, IPasswordHasher hasher, CancellationToken ct = default)
     {
         await db.Database.EnsureCreatedAsync(ct);
+        await UpgradeSchemaAsync(db, ct);
         if (await db.Categories.AnyAsync(ct)) return;
 
         // Categories — match frontend slugs
@@ -137,5 +138,40 @@ public static class Seeder
         }
 
         await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Idempotently apply schema changes for entities added after initial DB creation.
+    /// Uses raw SQL with IF NOT EXISTS so it is safe to run on every startup.
+    /// </summary>
+    private static async Task UpgradeSchemaAsync(AppDbContext db, CancellationToken ct)
+    {
+        await db.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS DisputeMessages (
+                Id TEXT NOT NULL CONSTRAINT PK_DisputeMessages PRIMARY KEY,
+                DisputeId TEXT NOT NULL,
+                AuthorUserId TEXT NOT NULL,
+                AuthorRole TEXT NOT NULL,
+                Body TEXT NOT NULL,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS IX_DisputeMessages_DisputeId ON DisputeMessages(DisputeId);
+
+            CREATE TABLE IF NOT EXISTS WithdrawRequests (
+                Id TEXT NOT NULL CONSTRAINT PK_WithdrawRequests PRIMARY KEY,
+                SellerUserId TEXT NOT NULL,
+                Amount TEXT NOT NULL,
+                Method TEXT NOT NULL,
+                Account TEXT NOT NULL,
+                Status INTEGER NOT NULL,
+                Note TEXT NULL,
+                AdminNote TEXT NULL,
+                ProcessedAt TEXT NULL,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS IX_WithdrawRequests_SellerUserId ON WithdrawRequests(SellerUserId);
+        ", ct);
     }
 }

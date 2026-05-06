@@ -135,3 +135,195 @@ export type ApiWalletState = {
   loyaltyPoints: number;
   transactions: ApiWalletTxn[];
 };
+
+export type ApiSellerProduct = {
+  id: string;
+  slug: string;
+  title: string;
+  categorySlug: string;
+  price: number;
+  comparePrice?: number | null;
+  delivery: string;
+  warrantyDays: number;
+  stock: number;
+  sold: number;
+  rating: number;
+  reviewCount: number;
+  thumbnailColor: string;
+  thumbnailIcon?: string | null;
+  status: string;
+  description: string;
+  inventoryAvailable: number;
+  inventoryReserved: number;
+  inventorySold: number;
+};
+
+export type ApiSellerOrderLine = {
+  orderId: string;
+  orderLineId: string;
+  orderCode: string;
+  status: string;
+  productId: string;
+  productTitle: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  delivery: string;
+  buyerDisplayName: string;
+  createdAt: string;
+  paidAt?: string | null;
+  deliveredAt?: string | null;
+  completedAt?: string | null;
+  deliveredItems?: string[] | null;
+};
+
+export type ApiSellerInventoryItem = {
+  id: string;
+  preview: string;
+  reserved: boolean;
+  sold: boolean;
+  orderId?: string | null;
+  createdAt: string;
+};
+
+export type ApiSellerInventoryView = {
+  productId: string;
+  productSlug: string;
+  productTitle: string;
+  available: number;
+  reserved: number;
+  soldCount: number;
+  items: ApiSellerInventoryItem[];
+};
+
+export type ApiSellerWithdraw = {
+  id: string;
+  amount: number;
+  method: string;
+  account: string;
+  status: string;
+  note?: string | null;
+  adminNote?: string | null;
+  createdAt: string;
+  processedAt?: string | null;
+};
+
+export type ApiSellerDashboard = {
+  revenue30d: number;
+  orders30d: number;
+  productsActive: number;
+  productsPending: number;
+  ordersAwaitingDelivery: number;
+  openDisputes: number;
+  pendingWithdrawals: number;
+  availableBalance: number;
+};
+
+export type ApiAdminUser = {
+  id: string;
+  email: string;
+  username: string;
+  displayName: string;
+  role: string;
+  walletBalance: number;
+  loyaltyPoints: number;
+  kycStatus: string;
+  createdAt: string;
+};
+
+export type ApiAdminProduct = {
+  id: string;
+  slug: string;
+  title: string;
+  categorySlug: string;
+  price: number;
+  stock: number;
+  sold: number;
+  rating: number;
+  status: string;
+  sellerUsername: string;
+  createdAt: string;
+};
+
+export type ApiAdminWithdraw = {
+  id: string;
+  sellerUserId: string;
+  sellerUsername: string;
+  amount: number;
+  method: string;
+  account: string;
+  status: string;
+  note?: string | null;
+  adminNote?: string | null;
+  createdAt: string;
+  processedAt?: string | null;
+};
+
+export type ApiAdminMetrics = {
+  gmv: number;
+  revenue: number;
+  ordersCompleted: number;
+  newUsers: number;
+  kycPending: number;
+  productsPending: number;
+  openDisputes: number;
+  pendingWithdrawals: number;
+};
+
+export type ApiKycSubmission = {
+  id: string;
+  status: string;
+  fullName: string;
+  idNumber: string;
+  address: string;
+  phoneNumber: string;
+  createdAt: string;
+  rejectionReason?: string | null;
+};
+
+export type ApiDisputeMessage = {
+  id: string;
+  authorUserId: string;
+  authorName: string;
+  authorRole: string;
+  body: string;
+  createdAt: string;
+};
+
+export type ApiDisputeListItem = {
+  id: string;
+  code: string;
+  orderId: string;
+  orderCode: string;
+  title: string;
+  status: string;
+  createdAt: string;
+  slaUntil: string;
+  resolution?: string | null;
+};
+
+export type ApiDisputeDetail = {
+  id: string;
+  code: string;
+  orderId: string;
+  orderCode: string;
+  buyerId: string;
+  sellerId: string;
+  title: string;
+  body: string;
+  status: string;
+  resolution?: string | null;
+  slaUntil: string;
+  createdAt: string;
+  messages: ApiDisputeMessage[];
+};
+
+export type ApiOwnReview = {
+  id: string;
+  productId: string;
+  productTitle: string;
+  rating: number;
+  comment: string;
+  createdAt: string;
+  reply?: string | null;
+};

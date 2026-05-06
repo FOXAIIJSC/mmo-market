@@ -16,7 +16,9 @@ public interface IAppDbContext
     DbSet<Review> Reviews { get; }
     DbSet<WalletTxn> WalletTxns { get; }
     DbSet<Dispute> Disputes { get; }
+    DbSet<DisputeMessage> DisputeMessages { get; }
     DbSet<KycSubmission> KycSubmissions { get; }
+    DbSet<WithdrawRequest> WithdrawRequests { get; }
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }
 
