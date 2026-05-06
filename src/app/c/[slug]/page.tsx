@@ -4,9 +4,12 @@ import { FilterSidebar } from "@/components/FilterSidebar";
 import { ProductCard } from "@/components/ProductCard";
 import { SiteShell } from "@/components/SiteShell";
 import { SortBar } from "@/components/SortBar";
-import { categories, getCategory, productsByCategory } from "@/lib/data";
+import { fetchCategories, fetchProducts } from "@/lib/serverData";
 
-export function generateStaticParams() {
+export const revalidate = 30;
+
+export async function generateStaticParams() {
+  const categories = await fetchCategories();
   return categories.map((c) => ({ slug: c.slug }));
 }
 
@@ -16,10 +19,12 @@ export default async function CategoryPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const category = getCategory(slug);
+  const [categories, list] = await Promise.all([
+    fetchCategories(),
+    fetchProducts({ category: slug, pageSize: 60 }),
+  ]);
+  const category = categories.find((c) => c.slug === slug);
   if (!category) notFound();
-
-  const list = productsByCategory(slug);
 
   return (
     <SiteShell>

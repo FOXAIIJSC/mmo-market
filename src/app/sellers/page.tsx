@@ -2,12 +2,14 @@ import Link from "next/link";
 import { Star } from "lucide-react";
 import { SiteShell } from "@/components/SiteShell";
 import { Badge } from "@/components/ui/Badge";
-import { sellers } from "@/lib/data";
+import { fetchSellers } from "@/lib/serverData";
 import { formatNumber } from "@/lib/format";
 
 export const metadata = { title: "Người bán nổi bật | MMO Market" };
+export const revalidate = 30;
 
-export default function SellersPage() {
+export default async function SellersPage() {
+  const sellers = await fetchSellers();
   return (
     <SiteShell>
       <div className="mx-auto max-w-7xl px-4 py-10">

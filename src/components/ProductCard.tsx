@@ -6,7 +6,7 @@ import { formatNumber, formatVND, pct } from "@/lib/format";
 import { cn } from "@/lib/cn";
 
 export function ProductCard({ product, compact }: { product: Product; compact?: boolean }) {
-  const seller = sellers.find((s) => s.id === product.sellerId);
+  const seller = product.seller || sellers.find((s) => s.id === product.sellerId);
   const discount =
     product.comparePrice && product.comparePrice > product.price
       ? 100 - Math.round((product.price / product.comparePrice) * 100)

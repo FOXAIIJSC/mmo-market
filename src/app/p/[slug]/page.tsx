@@ -17,16 +17,14 @@ import { ProductCard } from "@/components/ProductCard";
 import { SiteShell } from "@/components/SiteShell";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import {
-  getCategory,
-  getProduct,
-  getSeller,
-  products,
-  reviews,
-} from "@/lib/data";
+import { AddToCartButton } from "@/components/AddToCartButton";
+import { fetchCategories, fetchProductBySlug, fetchProducts } from "@/lib/serverData";
 import { formatNumber, formatVND, formatRelativeTime } from "@/lib/format";
 
-export function generateStaticParams() {
+export const revalidate = 30;
+
+export async function generateStaticParams() {
+  const products = await fetchProducts({ pageSize: 60 });
   return products.map((p) => ({ slug: p.slug }));
 }
 
@@ -36,15 +34,16 @@ export default async function ProductDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const product = getProduct(slug);
-  if (!product) notFound();
+  const data = await fetchProductBySlug(slug);
+  if (!data) notFound();
+  const { product, reviews: productReviews, seller } = data;
 
-  const seller = getSeller(product.sellerId);
-  const category = getCategory(product.category);
-  const productReviews = reviews.filter((r) => r.productId === product.id);
-  const related = products
-    .filter((p) => p.category === product.category && p.id !== product.id)
-    .slice(0, 5);
+  const [categories, related] = await Promise.all([
+    fetchCategories(),
+    fetchProducts({ category: product.category, pageSize: 6 }),
+  ]);
+  const category = categories.find((c) => c.slug === product.category);
+  const relatedFiltered = related.filter((p) => p.id !== product.id).slice(0, 5);
   const discount = product.comparePrice
     ? 100 - Math.round((product.price / product.comparePrice) * 100)
     : 0;
@@ -225,10 +224,8 @@ export default async function ProductDetailPage({
                   +
                 </button>
               </div>
-              <Button variant="outline" size="lg">Thêm vào giỏ</Button>
-              <Button size="lg">
-                Mua ngay
-              </Button>
+              <AddToCartButton productId={product.id} variant="outline" size="lg" label="Thêm vào giỏ" />
+              <AddToCartButton productId={product.id} size="lg" redirectTo="/cart" label="Mua ngay" />
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-text-muted">
@@ -465,7 +462,7 @@ export default async function ProductDetailPage({
                 Sản phẩm khác từ shop
               </div>
               <ul className="mt-3 space-y-2 text-sm">
-                {related.slice(0, 3).map((p) => (
+                {relatedFiltered.slice(0, 3).map((p) => (
                   <li key={p.id}>
                     <Link
                       href={`/p/${p.slug}`}
@@ -492,11 +489,11 @@ export default async function ProductDetailPage({
         </div>
 
         {/* Related */}
-        {related.length > 0 && (
+        {relatedFiltered.length > 0 && (
           <section className="mt-12">
             <h2 className="mb-4 text-xl font-bold text-text">Sản phẩm liên quan</h2>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
-              {related.map((p) => (
+              {relatedFiltered.map((p) => (
                 <ProductCard key={p.id} product={p} />
               ))}
             </div>

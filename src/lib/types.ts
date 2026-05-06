@@ -75,6 +75,13 @@ export interface Product {
   delivery: DeliveryMethod;
   warrantyDays: number;
   sellerId: string;
+  seller?: {
+    id: string;
+    username: string;
+    displayName: string;
+    avatarColor: string;
+    badge?: "verified" | "top" | "new";
+  };
   badges?: ("flash" | "new" | "top" | "limited")[];
   shortDescription: string;
   description: string;

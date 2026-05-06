@@ -4,10 +4,13 @@ import { ProductCard } from "@/components/ProductCard";
 import { SiteShell } from "@/components/SiteShell";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { products, sellers } from "@/lib/data";
+import { fetchSellers, fetchSellerByUsername } from "@/lib/serverData";
 import { formatNumber } from "@/lib/format";
 
-export function generateStaticParams() {
+export const revalidate = 30;
+
+export async function generateStaticParams() {
+  const sellers = await fetchSellers();
   return sellers.map((s) => ({ username: s.username }));
 }
 
@@ -17,10 +20,9 @@ export default async function SellerProfilePage({
   params: Promise<{ username: string }>;
 }) {
   const { username } = await params;
-  const seller = sellers.find((s) => s.username === username);
-  if (!seller) notFound();
-
-  const sellerProducts = products.filter((p) => p.sellerId === seller.id);
+  const data = await fetchSellerByUsername(username);
+  if (!data) notFound();
+  const { seller, products: sellerProducts } = data;
 
   return (
     <SiteShell>

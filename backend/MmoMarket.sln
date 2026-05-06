@@ -1,0 +1,48 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{B691222B-38FD-4E47-9647-CAC4955B73AA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MmoMarket.Domain", "src\MmoMarket.Domain\MmoMarket.Domain.csproj", "{B7C92156-F7B5-49F2-9564-96398F0581F4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MmoMarket.Application", "src\MmoMarket.Application\MmoMarket.Application.csproj", "{9A24F8BF-EFAA-4AF6-90C3-26B6F04527B2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MmoMarket.Infrastructure", "src\MmoMarket.Infrastructure\MmoMarket.Infrastructure.csproj", "{B086E1B1-391C-4EC6-ADA7-B4476EB113D8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MmoMarket.Api", "src\MmoMarket.Api\MmoMarket.Api.csproj", "{4437D683-6BA3-4BDC-9E31-5DE7A1BE1163}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B7C92156-F7B5-49F2-9564-96398F0581F4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B7C92156-F7B5-49F2-9564-96398F0581F4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B7C92156-F7B5-49F2-9564-96398F0581F4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B7C92156-F7B5-49F2-9564-96398F0581F4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9A24F8BF-EFAA-4AF6-90C3-26B6F04527B2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9A24F8BF-EFAA-4AF6-90C3-26B6F04527B2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9A24F8BF-EFAA-4AF6-90C3-26B6F04527B2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9A24F8BF-EFAA-4AF6-90C3-26B6F04527B2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B086E1B1-391C-4EC6-ADA7-B4476EB113D8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B086E1B1-391C-4EC6-ADA7-B4476EB113D8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B086E1B1-391C-4EC6-ADA7-B4476EB113D8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B086E1B1-391C-4EC6-ADA7-B4476EB113D8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4437D683-6BA3-4BDC-9E31-5DE7A1BE1163}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4437D683-6BA3-4BDC-9E31-5DE7A1BE1163}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4437D683-6BA3-4BDC-9E31-5DE7A1BE1163}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4437D683-6BA3-4BDC-9E31-5DE7A1BE1163}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{B7C92156-F7B5-49F2-9564-96398F0581F4} = {B691222B-38FD-4E47-9647-CAC4955B73AA}
+		{9A24F8BF-EFAA-4AF6-90C3-26B6F04527B2} = {B691222B-38FD-4E47-9647-CAC4955B73AA}
+		{B086E1B1-391C-4EC6-ADA7-B4476EB113D8} = {B691222B-38FD-4E47-9647-CAC4955B73AA}
+		{4437D683-6BA3-4BDC-9E31-5DE7A1BE1163} = {B691222B-38FD-4E47-9647-CAC4955B73AA}
+	EndGlobalSection
+EndGlobal

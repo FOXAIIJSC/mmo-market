@@ -1,8 +1,10 @@
+"use client";
 import { Grid2x2, List, ArrowUpDown } from "lucide-react";
 
 const sorts = [
   { v: "popular", label: "Bán chạy" },
-  { v: "new", label: "Mới nhất" },
+  { v: "newest", label: "Mới nhất" },
+  { v: "bestseller", label: "Top bán" },
   { v: "price-asc", label: "Giá ↑" },
   { v: "price-desc", label: "Giá ↓" },
   { v: "rating", label: "Đánh giá" },
@@ -10,10 +12,12 @@ const sorts = [
 
 export function SortBar({
   total,
-  active = "popular",
+  value = "popular",
+  onChange,
 }: {
   total: number;
-  active?: string;
+  value?: string;
+  onChange?: (v: string) => void;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-bg-card p-3">
@@ -25,8 +29,9 @@ export function SortBar({
         {sorts.map((s) => (
           <button
             key={s.v}
+            onClick={() => onChange?.(s.v)}
             className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-              s.v === active
+              s.v === value
                 ? "bg-brand text-white"
                 : "bg-bg-elev text-text-muted hover:bg-bg-elev/80 hover:text-text"
             }`}

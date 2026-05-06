@@ -1,0 +1,11 @@
+bin/
+obj/
+*.user
+*.db
+*.db-shm
+*.db-wal
+.dockerignore.bak
+.env
+.env.local
+*.swp
+.fly-state

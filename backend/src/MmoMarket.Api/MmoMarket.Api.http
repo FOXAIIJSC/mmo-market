@@ -1,0 +1,6 @@
+@MmoMarket.Api_HostAddress = http://localhost:5199
+
+GET {{MmoMarket.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

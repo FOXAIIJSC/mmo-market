@@ -7,24 +7,23 @@ import { PromoStrip } from "@/components/PromoStrip";
 import { SectionHeader } from "@/components/SectionHeader";
 import { SellerStrip } from "@/components/SellerStrip";
 import { SiteShell } from "@/components/SiteShell";
-import {
-  categories,
-  flashSaleProducts,
-  newProducts,
-  products,
-  productsByCategory,
-  topProducts,
-} from "@/lib/data";
+import { fetchCategories, fetchProducts } from "@/lib/serverData";
 import { formatVND } from "@/lib/format";
 import Link from "next/link";
 
-export default function Home() {
-  const flash = flashSaleProducts();
-  const top = topProducts(10);
-  const fresh = newProducts(8);
-  const ai = productsByCategory("ai").slice(0, 5);
-  const tools = productsByCategory("tool").slice(0, 5);
-  const courses = productsByCategory("course").slice(0, 5);
+export const revalidate = 30;
+
+export default async function Home() {
+  const [categories, allProducts, top, fresh, ai, tools, courses] = await Promise.all([
+    fetchCategories(),
+    fetchProducts({ pageSize: 60 }),
+    fetchProducts({ sort: "bestseller", pageSize: 10 }),
+    fetchProducts({ sort: "newest", pageSize: 8 }),
+    fetchProducts({ category: "ai", pageSize: 5 }),
+    fetchProducts({ category: "tool", pageSize: 5 }),
+    fetchProducts({ category: "course", pageSize: 5 }),
+  ]);
+  const flash = allProducts.filter((p) => p.comparePrice && p.comparePrice > p.price).slice(0, 5);
 
   return (
     <SiteShell>
@@ -225,7 +224,7 @@ export default function Home() {
               <div className="text-xs text-text-muted">GMV 30 ngày</div>
             </div>
             <div>
-              <div className="num text-2xl font-extrabold text-text">{products.length * 350}+</div>
+              <div className="num text-2xl font-extrabold text-text">{Math.max(allProducts.length * 350, 1000)}+</div>
               <div className="text-xs text-text-muted">Sản phẩm đang bán</div>
             </div>
           </div>
