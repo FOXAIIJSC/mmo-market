@@ -1,0 +1,173 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+import Link from "next/link";
+import {
+  AlertTriangle,
+  ArrowDownToLine,
+  BarChart3,
+  Bell,
+  Box,
+  Database,
+  DollarSign,
+  Gift,
+  Heart,
+  Image as ImageIcon,
+  LayoutDashboard,
+  MessageCircle,
+  Package,
+  Settings,
+  ShieldCheck,
+  ShoppingBag,
+  Sliders,
+  Star,
+  Ticket,
+  Users,
+  Wallet,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { cn } from "@/lib/cn";
+import { Logo } from "./Logo";
+
+const iconMap: Record<string, LucideIcon> = {
+  alert: AlertTriangle,
+  arrowDown: ArrowDownToLine,
+  bar: BarChart3,
+  bell: Bell,
+  box: Box,
+  database: Database,
+  dollar: DollarSign,
+  gift: Gift,
+  heart: Heart,
+  image: ImageIcon,
+  dashboard: LayoutDashboard,
+  message: MessageCircle,
+  package: Package,
+  settings: Settings,
+  shield: ShieldCheck,
+  shop: ShoppingBag,
+  sliders: Sliders,
+  star: Star,
+  ticket: Ticket,
+  users: Users,
+  wallet: Wallet,
+};
+
+export interface NavItem {
+  href: string;
+  label: string;
+  icon: keyof typeof iconMap;
+  badge?: string;
+}
+
+export interface NavGroup {
+  label?: string;
+  items: NavItem[];
+}
+
+export function DashboardLayout({
+  groups,
+  title,
+  subtitle,
+  topRight,
+  children,
+  variant = "buyer",
+}: {
+  groups: NavGroup[];
+  title: string;
+  subtitle?: string;
+  topRight?: React.ReactNode;
+  children: React.ReactNode;
+  variant?: "buyer" | "seller" | "admin";
+}) {
+  const pathname = usePathname();
+  const variantBadge = {
+    buyer: { label: "Buyer", color: "bg-accent text-black" },
+    seller: { label: "Seller", color: "bg-brand text-white" },
+    admin: { label: "Admin", color: "bg-danger text-white" },
+  }[variant];
+
+  return (
+    <div className="grid min-h-screen lg:grid-cols-[260px_1fr]">
+      <aside className="sticky top-0 hidden h-screen flex-col border-r border-border bg-bg-elev/40 lg:flex">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <Logo />
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase",
+              variantBadge.color,
+            )}
+          >
+            {variantBadge.label}
+          </span>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto px-3 py-4">
+          {groups.map((g, gi) => (
+            <div key={gi} className={gi > 0 ? "mt-6" : ""}>
+              {g.label && (
+                <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-widest text-text-dim">
+                  {g.label}
+                </div>
+              )}
+              <ul className="space-y-0.5">
+                {g.items.map((item) => {
+                  const Icon = iconMap[item.icon] ?? LayoutDashboard;
+                  const active =
+                    pathname === item.href ||
+                    (item.href !== "/" && pathname.startsWith(item.href));
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        className={cn(
+                          "flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition",
+                          active
+                            ? "bg-brand-soft text-text"
+                            : "text-text-muted hover:bg-bg-elev hover:text-text",
+                        )}
+                      >
+                        <Icon
+                          className={cn(
+                            "size-4",
+                            active ? "text-brand" : "text-text-muted",
+                          )}
+                        />
+                        <span className="flex-1">{item.label}</span>
+                        {item.badge && (
+                          <span className="rounded-full bg-danger/20 px-1.5 py-0.5 text-[10px] font-bold text-danger">
+                            {item.badge}
+                          </span>
+                        )}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </nav>
+
+        <div className="border-t border-border p-3">
+          <Link
+            href="/"
+            className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-text-muted hover:bg-bg-elev hover:text-text"
+          >
+            ← Quay lại sàn
+          </Link>
+        </div>
+      </aside>
+
+      <div className="min-w-0">
+        <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b border-border bg-bg/80 px-6 backdrop-blur-xl">
+          <div>
+            <h1 className="text-base font-bold text-text">{title}</h1>
+            {subtitle && <p className="text-xs text-text-muted">{subtitle}</p>}
+          </div>
+          <div className="ml-auto flex items-center gap-2">{topRight}</div>
+        </header>
+        <main className="p-6">{children}</main>
+      </div>
+    </div>
+  );
+}

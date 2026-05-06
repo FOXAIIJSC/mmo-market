@@ -1,65 +1,238 @@
-import Image from "next/image";
+import { AffiliateBanner } from "@/components/AffiliateBanner";
+import { BannerGrid } from "@/components/BannerGrid";
+import { CategoryTile } from "@/components/CategoryTile";
+import { Hero } from "@/components/Hero";
+import { ProductCard } from "@/components/ProductCard";
+import { PromoStrip } from "@/components/PromoStrip";
+import { SectionHeader } from "@/components/SectionHeader";
+import { SellerStrip } from "@/components/SellerStrip";
+import { SiteShell } from "@/components/SiteShell";
+import {
+  categories,
+  flashSaleProducts,
+  newProducts,
+  products,
+  productsByCategory,
+  topProducts,
+} from "@/lib/data";
+import { formatVND } from "@/lib/format";
+import Link from "next/link";
 
 export default function Home() {
+  const flash = flashSaleProducts();
+  const top = topProducts(10);
+  const fresh = newProducts(8);
+  const ai = productsByCategory("ai").slice(0, 5);
+  const tools = productsByCategory("tool").slice(0, 5);
+  const courses = productsByCategory("course").slice(0, 5);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <SiteShell>
+      <PromoStrip />
+      <Hero />
+      <BannerGrid />
+
+      {/* Categories */}
+      <section className="mx-auto mt-12 max-w-7xl px-4">
+        <SectionHeader
+          title="Chọn danh mục"
+          subtitle="8 nhóm sản phẩm số chuyên biệt cho cộng đồng MMO"
+          accent="🗂"
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
+          {categories.map((c) => (
+            <CategoryTile key={c.slug} category={c} />
+          ))}
+        </div>
+      </section>
+
+      {/* Flash sale */}
+      <section className="mx-auto mt-12 max-w-7xl px-4">
+        <SectionHeader
+          title="Flash Sale"
+          subtitle="Giảm sốc, số lượng có hạn — kết thúc trong 04:21:35"
+          href="/flash-sale"
+          accent="⚡"
+        />
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+          {flash.slice(0, 5).map((p) => (
+            <ProductCard key={p.id} product={p} />
+          ))}
+        </div>
+      </section>
+
+      {/* Bestsellers */}
+      <section className="mx-auto mt-12 max-w-7xl px-4">
+        <SectionHeader
+          title="Phần mềm, tài khoản bán chạy"
+          subtitle="Top sản phẩm có lượt mua cao nhất 30 ngày"
+          href="/marketplace?sort=top"
+          accent="🔥"
+        />
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+          {top.slice(0, 10).map((p) => (
+            <ProductCard key={p.id} product={p} />
+          ))}
+        </div>
+      </section>
+
+      {/* AI showcase */}
+      <section className="mx-auto mt-12 max-w-7xl px-4">
+        <div className="grid gap-6 lg:grid-cols-12">
+          <div className="lg:col-span-4">
+            <div className="card-glow flex h-full flex-col justify-between rounded-3xl bg-gradient-to-br from-violet-700/30 via-fuchsia-700/20 to-bg-card p-6">
+              <div>
+                <span className="rounded-full bg-brand/30 px-3 py-1 text-xs font-bold uppercase tracking-wider text-brand">
+                  AI Hub
+                </span>
+                <h2 className="mt-4 text-2xl font-extrabold text-text">
+                  Toàn bộ AI hot — giá tốt nhất Việt Nam
+                </h2>
+                <p className="mt-2 text-sm text-text-muted">
+                  ChatGPT Plus, Claude Pro, Gemini Advanced + Veo 3, Cursor Max
+                  Mode, Midjourney v7, Notion AI Plus...
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                  {["ChatGPT", "Claude", "Gemini", "Cursor", "Midjourney"].map(
+                    (t) => (
+                      <span
+                        key={t}
+                        className="rounded-full border border-border bg-bg-card px-3 py-1 text-text-muted"
+                      >
+                        {t}
+                      </span>
+                    ),
+                  )}
+                </div>
+              </div>
+              <Link
+                href="/c/ai"
+                className="mt-6 inline-flex w-fit items-center gap-2 rounded-full bg-gradient-to-r from-brand to-accent px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand/30"
+              >
+                Khám phá AI →
+              </Link>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:col-span-8 lg:grid-cols-3">
+            {ai.slice(0, 5).map((p, i) => (
+              <div key={p.id} className={i === 0 ? "sm:col-span-2 lg:col-span-2" : ""}>
+                <ProductCard product={p} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Tools */}
+      <section className="mx-auto mt-12 max-w-7xl px-4">
+        <SectionHeader
+          title="Tool & phần mềm bản quyền"
+          href="/c/tool"
+          accent="🛠"
+        />
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+          {tools.map((p) => (
+            <ProductCard key={p.id} product={p} />
+          ))}
+        </div>
+      </section>
+
+      {/* Courses */}
+      <section className="mx-auto mt-12 max-w-7xl px-4">
+        <SectionHeader
+          title="Khoá học MMO chất lượng"
+          href="/c/course"
+          accent="🎓"
+        />
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+          {courses.map((p) => (
+            <ProductCard key={p.id} product={p} />
+          ))}
+        </div>
+      </section>
+
+      {/* Newest */}
+      <section className="mx-auto mt-12 max-w-7xl px-4">
+        <SectionHeader title="Mới nhất trên sàn" href="/marketplace?sort=new" accent="🆕" />
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+          {fresh.map((p) => (
+            <ProductCard key={p.id} product={p} />
+          ))}
+        </div>
+      </section>
+
+      <AffiliateBanner />
+      <SellerStrip />
+
+      {/* Trust strip */}
+      <section className="mx-auto mt-12 max-w-7xl px-4">
+        <div className="grid gap-3 md:grid-cols-4">
+          {[
+            {
+              t: "🛡 Escrow giữ tiền",
+              d: "Tiền của bạn được giữ trong hệ thống cho đến khi bạn xác nhận hoặc hết 72h auto-complete.",
+            },
+            {
+              t: "🔍 Kiểm tra trùng",
+              d: "Mọi tài khoản số được hash kiểm trùng trước khi giao — không có chuyện 'bán đi bán lại'.",
+            },
+            {
+              t: "🔁 Bảo hành 1 đổi 1",
+              d: "Tài khoản die trong thời hạn được hoàn tiền 100% hoặc đổi mới.",
+            },
+            {
+              t: "👨‍⚖️ Trọng tài minh bạch",
+              d: "Admin giải quyết tranh chấp trong 48-72h, có ghi log và bằng chứng đầy đủ.",
+            },
+          ].map((b) => (
+            <div
+              key={b.t}
+              className="rounded-2xl border border-border bg-bg-card p-5 text-sm"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+              <div className="font-semibold text-text">{b.t}</div>
+              <p className="mt-1 text-text-muted">{b.d}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* About */}
+      <section className="mx-auto mt-12 max-w-7xl px-4">
+        <div className="rounded-3xl border border-border bg-bg-card p-8 md:p-10">
+          <h2 className="text-center text-2xl font-extrabold text-text md:text-3xl">
+            MMO Market — Sàn TMĐT sản phẩm số
+          </h2>
+          <p className="mx-auto mt-4 max-w-3xl text-center text-sm leading-7 text-text-muted">
+            MMO Market được xây dựng nhằm mang đến nền tảng giao dịch sản phẩm
+            số an toàn, minh bạch cho cộng đồng MMO Việt Nam. Chúng tôi giải
+            quyết bài toán lừa đảo trên các kênh giao dịch tự phát bằng mô hình
+            <span className="px-1 text-brand">trung gian giữ tiền</span>—
+            <span className="px-1 text-accent">kiểm tra sản phẩm</span>—
+            <span className="px-1 text-success">bảo vệ người mua</span>, cùng
+            hệ thống Affiliate / Reseller chuyên nghiệp.
           </p>
+          <div className="mx-auto mt-8 grid max-w-4xl grid-cols-2 gap-4 text-center md:grid-cols-4">
+            <div>
+              <div className="num text-2xl font-extrabold text-text">128K+</div>
+              <div className="text-xs text-text-muted">Đơn hàng giao auto</div>
+            </div>
+            <div>
+              <div className="num text-2xl font-extrabold text-text">7K+</div>
+              <div className="text-xs text-text-muted">Người bán đã KYC</div>
+            </div>
+            <div>
+              <div className="num text-2xl font-extrabold text-text">{formatVND(2_482_550_000)}</div>
+              <div className="text-xs text-text-muted">GMV 30 ngày</div>
+            </div>
+            <div>
+              <div className="num text-2xl font-extrabold text-text">{products.length * 350}+</div>
+              <div className="text-xs text-text-muted">Sản phẩm đang bán</div>
+            </div>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      </section>
+
+      <div className="h-8" />
+    </SiteShell>
   );
 }

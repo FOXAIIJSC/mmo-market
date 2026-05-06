@@ -1,0 +1,176 @@
+import Link from "next/link";
+import { ArrowRight, Award, BarChart3, CheckCircle2, DollarSign, Sparkles, Users } from "lucide-react";
+import { SiteShell } from "@/components/SiteShell";
+import { Button } from "@/components/ui/Button";
+import { formatVND } from "@/lib/format";
+
+export const metadata = { title: "Chương trình Affiliate | MMO Market" };
+
+const tiers = [
+  {
+    name: "Starter",
+    rate: "5%",
+    color: "from-amber-700 to-amber-500",
+    benefits: ["Hoa hồng mọi đơn hàng", "Link tracking realtime", "Rút khi đạt 100K"],
+    minRefs: 0,
+  },
+  {
+    name: "Pro",
+    rate: "7%",
+    color: "from-slate-400 to-slate-200",
+    benefits: ["Tất cả Starter +", "Banner / Material marketing", "Hỗ trợ 1-1", "Rút khi đạt 50K"],
+    minRefs: 10,
+    highlight: false,
+  },
+  {
+    name: "Elite",
+    rate: "10%",
+    color: "from-yellow-500 to-yellow-300",
+    benefits: [
+      "Tất cả Pro +",
+      "Sub-affiliate (lớp 2)",
+      "Doanh thu MMO Lab event",
+      "Rút bất cứ lúc nào",
+    ],
+    minRefs: 30,
+    highlight: true,
+  },
+];
+
+export default function AffiliatePage() {
+  return (
+    <SiteShell>
+      {/* Hero */}
+      <section className="relative overflow-hidden bg-gradient-to-br from-brand via-fuchsia-700 to-accent">
+        <div className="absolute inset-0 bg-dots opacity-20 mix-blend-overlay" />
+        <div className="absolute -right-20 top-1/4 size-96 rounded-full bg-white/15 blur-3xl" />
+
+        <div className="relative mx-auto max-w-7xl px-4 py-16 text-white md:py-24">
+          <div className="grid items-center gap-10 md:grid-cols-2">
+            <div>
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold backdrop-blur">
+                <Sparkles className="size-3.5" /> MMO Market | Affiliate
+              </span>
+              <h1 className="mt-4 text-4xl font-extrabold leading-tight md:text-5xl">
+                Kiếm tiền cùng MMO Market.<br />
+                Hoa hồng đến <span className="text-yellow-200">10%</span> trọn đời.
+              </h1>
+              <p className="mt-4 max-w-lg text-white/85">
+                Chia sẻ link giới thiệu — nhận hoa hồng cho mọi đơn hàng người được giới thiệu mua
+                trên sàn. Tracking realtime, rút tiền linh hoạt, hỗ trợ 24/7.
+              </p>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <Link href="/register">
+                  <Button size="lg" variant="outline" className="bg-white text-brand-strong hover:bg-white/90">
+                    Đăng ký ngay
+                    <ArrowRight className="size-4" />
+                  </Button>
+                </Link>
+                <Button size="lg" variant="outline" className="border-white/40 bg-white/10 text-white hover:bg-white/20">
+                  Tải tài liệu
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[
+                { icon: <Users className="size-5" />, value: "1.842", label: "Cộng tác viên active" },
+                { icon: <DollarSign className="size-5" />, value: formatVND(3_400_000_000), label: "Hoa hồng đã trả" },
+                { icon: <BarChart3 className="size-5" />, value: "8.2%", label: "Tỷ lệ chuyển đổi TB" },
+                { icon: <Award className="size-5" />, value: "10%", label: "Hoa hồng cao nhất" },
+              ].map((s) => (
+                <div
+                  key={s.label}
+                  className="rounded-2xl bg-white/15 p-4 text-white backdrop-blur"
+                >
+                  <div className="mb-1">{s.icon}</div>
+                  <div className="num text-2xl font-extrabold">{s.value}</div>
+                  <div className="text-xs opacity-80">{s.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="mx-auto max-w-7xl px-4 py-16">
+        <div className="text-center">
+          <h2 className="text-3xl font-extrabold text-text">Cách hoạt động</h2>
+          <p className="mt-2 text-text-muted">Chỉ 4 bước. Không phí, không yêu cầu doanh số.</p>
+        </div>
+
+        <div className="mt-10 grid gap-4 md:grid-cols-4">
+          {[
+            ["1", "Đăng ký miễn phí", "Tạo tài khoản MMO Market — kích hoạt tính năng affiliate trong dashboard."],
+            ["2", "Lấy link giới thiệu", "Tạo link cho từng sản phẩm hoặc link giới thiệu chung."],
+            ["3", "Chia sẻ", "Đăng lên Facebook, TikTok, blog, Telegram, Discord — bất kỳ kênh nào."],
+            ["4", "Nhận hoa hồng", "Khi người được giới thiệu mua hàng, hoa hồng cộng vào ví ngay."],
+          ].map(([n, t, d]) => (
+            <div key={n} className="rounded-2xl border border-border bg-bg-card p-5">
+              <div className="grid size-10 place-items-center rounded-xl bg-gradient-to-br from-brand to-accent text-base font-extrabold text-white">
+                {n}
+              </div>
+              <h3 className="mt-4 font-semibold text-text">{t}</h3>
+              <p className="mt-1 text-sm text-text-muted">{d}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Tiers */}
+      <section className="mx-auto max-w-7xl px-4 py-12">
+        <div className="text-center">
+          <h2 className="text-3xl font-extrabold text-text">3 hạng — càng cao càng nhiều ưu đãi</h2>
+          <p className="mt-2 text-text-muted">Tự động xếp hạng dựa trên số ref active mỗi tháng.</p>
+        </div>
+        <div className="mt-10 grid gap-4 md:grid-cols-3">
+          {tiers.map((t) => (
+            <div
+              key={t.name}
+              className={`rounded-3xl border p-6 ${
+                t.highlight
+                  ? "border-brand bg-gradient-to-br from-brand/30 via-bg-card to-accent/20 shadow-2xl shadow-brand/20"
+                  : "border-border bg-bg-card"
+              }`}
+            >
+              <div
+                className={`mb-3 inline-flex rounded-full bg-gradient-to-r ${t.color} px-3 py-1 text-xs font-bold uppercase text-bg-card`}
+              >
+                {t.name}
+              </div>
+              <div className="num text-5xl font-extrabold text-text">{t.rate}</div>
+              <div className="mt-1 text-sm text-text-muted">
+                Cần ≥ {t.minRefs} ref active mỗi tháng
+              </div>
+              <ul className="mt-5 space-y-2 text-sm text-text-muted">
+                {t.benefits.map((b) => (
+                  <li key={b} className="flex items-start gap-2">
+                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />
+                    {b}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="mx-auto max-w-7xl px-4 pb-12">
+        <div className="rounded-3xl border border-border bg-gradient-to-br from-brand to-accent p-10 text-center text-white">
+          <h2 className="text-3xl font-extrabold">Sẵn sàng bắt đầu kiếm tiền?</h2>
+          <p className="mx-auto mt-2 max-w-xl text-white/85">
+            Hơn 1.800 CTV đã nhận hoa hồng tổng cộng 3.4 tỷ. Tham gia miễn phí ngay hôm nay.
+          </p>
+          <Link href="/register" className="mt-6 inline-block">
+            <Button size="lg" variant="outline" className="bg-white text-brand-strong hover:bg-white/90">
+              Đăng ký miễn phí
+              <ArrowRight className="size-4" />
+            </Button>
+          </Link>
+        </div>
+      </section>
+    </SiteShell>
+  );
+}
