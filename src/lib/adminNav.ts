@@ -13,6 +13,7 @@ export const adminNav: NavGroup[] = [
   {
     label: "Vận hành",
     items: [
+      { href: "/admin/wallet", label: "Ví & Nạp tiền", icon: "wallet" },
       { href: "/admin/disputes", label: "Tranh chấp", icon: "alert", badge: "5" },
       { href: "/admin/finance", label: "Tài chính", icon: "dollar" },
       { href: "/admin/reports", label: "Báo cáo", icon: "bar" },

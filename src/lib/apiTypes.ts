@@ -327,3 +327,32 @@ export type ApiOwnReview = {
   createdAt: string;
   reply?: string | null;
 };
+
+export type ApiAdminWalletUser = {
+  id: string;
+  email: string;
+  username: string;
+  displayName: string;
+  role: string;
+  walletBalance: number;
+  loyaltyPoints: number;
+  txnCount: number;
+  createdAt: string;
+};
+
+export type ApiAdminWalletOverview = {
+  totalBalance: number;
+  totalUsers: number;
+  totalTopup: number;
+  totalSpent: number;
+  pendingTopups: number;
+};
+
+export type ApiAdminWalletTxn = {
+  id: string;
+  type: string;
+  status: string;
+  amount: number;
+  note: string;
+  createdAt: string;
+};

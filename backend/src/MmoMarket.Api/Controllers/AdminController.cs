@@ -61,4 +61,17 @@ public class AdminController : ControllerBase
     public record ProcessWithdrawDto(bool Approve, string? AdminNote);
     [HttpPost("withdrawals/{id:guid}/process")]
     public Task<AdminWithdrawDto> ProcessWithdraw(Guid id, [FromBody] ProcessWithdrawDto dto, CancellationToken ct) => _svc.ProcessWithdrawAsync(id, dto.Approve, dto.AdminNote, ct);
+
+    [HttpGet("wallets/overview")]
+    public Task<AdminWalletOverview> WalletOverview(CancellationToken ct) => _svc.GetWalletOverviewAsync(ct);
+
+    [HttpGet("wallets")]
+    public Task<AdminWalletUserDto[]> WalletUsers([FromQuery] string? search, CancellationToken ct) => _svc.ListWalletUsersAsync(search, ct);
+
+    [HttpGet("wallets/{userId:guid}/transactions")]
+    public Task<AdminWalletTxnDto[]> UserTransactions(Guid userId, CancellationToken ct) => _svc.GetUserTransactionsAsync(userId, ct);
+
+    public record AdminTopupRequest(decimal Amount, string? Note);
+    [HttpPost("wallets/{userId:guid}/topup")]
+    public Task<AdminWalletUserDto> AdminTopup(Guid userId, [FromBody] AdminTopupRequest dto, CancellationToken ct) => _svc.AdminTopupAsync(userId, new AdminTopupDto(dto.Amount, dto.Note ?? ""), ct);
 }
