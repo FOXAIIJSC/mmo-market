@@ -8,6 +8,10 @@ using MmoMarket.Application.Orders;
 using MmoMarket.Application.Reviews;
 using MmoMarket.Application.Sellers;
 using MmoMarket.Application.Wallet;
+using MmoMarket.Application.Config;
+using MmoMarket.Application.Coupons;
+using MmoMarket.Application.Notifications;
+using MmoMarket.Application.Wishlist;
 
 namespace MmoMarket.Application;
 
@@ -25,6 +29,10 @@ public static class DependencyInjection
         services.AddScoped<ReviewService>();
         services.AddScoped<DisputeService>();
         services.AddScoped<AdminService>();
+        services.AddScoped<WishlistService>();
+        services.AddScoped<NotificationService>();
+        services.AddScoped<CouponService>();
+        services.AddScoped<ConfigService>();
         return services;
     }
 }

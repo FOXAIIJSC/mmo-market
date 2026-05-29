@@ -1,15 +1,8 @@
 import Link from "next/link";
-import {
-  Bell,
-  ChevronDown,
-  Heart,
-  Search,
-  ShoppingCart,
-  User,
-  Wallet,
-} from "lucide-react";
+import { ChevronDown, Search } from "lucide-react";
 import { Logo } from "./Logo";
 import { categories } from "@/lib/data";
+import { HeaderUserActions } from "./HeaderUserActions";
 
 export function Header() {
   return (
@@ -68,62 +61,8 @@ export function Header() {
           </button>
         </form>
 
-        {/* Actions */}
-        <nav className="ml-auto flex items-center gap-1.5 text-sm text-text-muted">
-          <Link
-            href="/wallet"
-            className="hidden items-center gap-2 rounded-full px-3 py-2 hover:bg-bg-elev hover:text-text md:flex"
-          >
-            <Wallet className="size-4" />
-            <span className="num">2.075.000₫</span>
-          </Link>
-          <Link
-            href="/notifications"
-            className="hidden rounded-full p-2 hover:bg-bg-elev hover:text-text md:block"
-            aria-label="Thông báo"
-          >
-            <Bell className="size-5" />
-          </Link>
-          <Link
-            href="/wishlist"
-            className="hidden rounded-full p-2 hover:bg-bg-elev hover:text-text md:block"
-            aria-label="Yêu thích"
-          >
-            <Heart className="size-5" />
-          </Link>
-          <Link
-            href="/cart"
-            className="relative rounded-full p-2 hover:bg-bg-elev hover:text-text"
-            aria-label="Giỏ hàng"
-          >
-            <ShoppingCart className="size-5" />
-            <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-brand px-1 text-[10px] font-bold text-white">
-              3
-            </span>
-          </Link>
-
-          <div className="ml-2 hidden h-9 w-px bg-border md:block" />
-          <Link
-            href="/login"
-            className="hidden rounded-full border border-border bg-bg-elev px-4 py-2 text-text hover:border-brand md:block"
-          >
-            Đăng nhập
-          </Link>
-          <Link
-            href="/register"
-            className="hidden rounded-full bg-gradient-to-r from-brand to-accent px-4 py-2 font-semibold text-white shadow-lg shadow-brand/30 md:block"
-          >
-            Đăng ký
-          </Link>
-
-          <Link
-            href="/account"
-            className="grid h-9 w-9 place-items-center rounded-full bg-bg-elev text-text md:hidden"
-            aria-label="Tài khoản"
-          >
-            <User className="size-4" />
-          </Link>
-        </nav>
+        {/* Actions — role-aware, rendered client-side */}
+        <HeaderUserActions />
       </div>
 
       {/* Category nav */}

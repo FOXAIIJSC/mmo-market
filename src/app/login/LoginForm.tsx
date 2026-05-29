@@ -20,8 +20,10 @@ export function LoginForm() {
     setErr(null);
     setLoading(true);
     try {
-      await login(email, password);
-      router.push("/account");
+      const user = await login(email, password);
+      if (user.role === "Admin" || user.role === "SuperAdmin") router.push("/admin");
+      else if (user.role === "Seller") router.push("/seller/dashboard");
+      else router.push("/account");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Đăng nhập thất bại");
     } finally {

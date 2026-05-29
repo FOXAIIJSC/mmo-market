@@ -21,4 +21,8 @@ public class ReviewController : ControllerBase
 
     [HttpGet("mine")]
     public Task<OwnReviewDto[]> Mine(CancellationToken ct) => _svc.GetMineAsync(Uid, ct);
+
+    [HttpPut("{id:guid}")]
+    public Task<OwnReviewDto> Update(Guid id, [FromBody] ReviewUpdateDto dto, CancellationToken ct) =>
+        _svc.UpdateAsync(Uid, id, dto, ct);
 }

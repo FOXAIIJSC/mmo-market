@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using MmoMarket.Application.Common;
 using MmoMarket.Domain.Entities;
 using MmoMarket.Domain.Enums;
+// ReSharper disable once RedundantUsingDirective (needed for CouponType in SeedDemoCouponsAsync)
 
 namespace MmoMarket.Infrastructure.Persistence;
 
@@ -12,6 +13,12 @@ public static class Seeder
     {
         await db.Database.EnsureCreatedAsync(ct);
         await UpgradeSchemaAsync(db, ct);
+        await SeedDemoNotificationsAsync(db, ct);
+        await SeedDemoCouponsAsync(db, ct);
+        await SeedDemoBannersAsync(db, ct);
+        await SeedDemoFlashSalesAsync(db, ct);
+        await SeedDefaultConfigAsync(db, ct);
+        await SeedDemoLoyaltyRewardsAsync(db, ct);
         if (await db.Categories.AnyAsync(ct)) return;
 
         // Categories — match frontend slugs
@@ -140,6 +147,38 @@ public static class Seeder
         await db.SaveChangesAsync(ct);
     }
 
+    private static async Task SeedDemoCouponsAsync(AppDbContext db, CancellationToken ct)
+    {
+        if (await db.Coupons.AnyAsync(ct)) return;
+        var now = DateTime.UtcNow;
+        db.Coupons.AddRange(
+            new Coupon { Code = "WELCOME100", Description = "Chào mừng thành viên mới — giảm 100.000₫",        Type = CouponType.Fixed,   Value = 100_000m, MinOrderAmount = 300_000m, MaxUses = 1,   ExpiresAt = now.AddDays(30) },
+            new Coupon { Code = "SALE20",     Description = "Giảm 20% tối đa 150.000₫ cho mọi đơn hàng",      Type = CouponType.Percent, Value = 20m,      MinOrderAmount = 200_000m, MaxDiscount = 150_000m, MaxUses = 0, ExpiresAt = now.AddDays(7)  },
+            new Coupon { Code = "FREESHIP",   Description = "Miễn phí gateway — giảm 5.000₫ phí giao dịch",   Type = CouponType.Fixed,   Value = 5_000m,   MinOrderAmount = 0m,       MaxUses = 0,  ExpiresAt = now.AddDays(14) },
+            new Coupon { Code = "FLASH50K",   Description = "Flash Sale — giảm thẳng 50.000₫",                Type = CouponType.Fixed,   Value = 50_000m,  MinOrderAmount = 500_000m, MaxUses = 100,ExpiresAt = now.AddDays(1)  },
+            new Coupon { Code = "VIP15",      Description = "Ưu đãi VIP — giảm 15% không giới hạn",           Type = CouponType.Percent, Value = 15m,      MinOrderAmount = 100_000m, MaxUses = 50, ExpiresAt = now.AddDays(60) },
+            new Coupon { Code = "EXPIRED10",  Description = "Mã đã hết hạn (demo)",                            Type = CouponType.Fixed,   Value = 10_000m,  MinOrderAmount = 0m,       MaxUses = 0,  ExpiresAt = now.AddDays(-1), IsActive = true }
+        );
+        await db.SaveChangesAsync(ct);
+    }
+
+    private static async Task SeedDemoNotificationsAsync(AppDbContext db, CancellationToken ct)
+    {
+        if (await db.Notifications.AnyAsync(ct)) return;
+        var buyer = await db.Users.FirstOrDefaultAsync(u => u.Email == "buyer@mmo.local", ct);
+        if (buyer == null) return;
+        var now = DateTime.UtcNow;
+        db.Notifications.AddRange(
+            new Notification { UserId = buyer.Id, Type = "system", Title = "Chào mừng đến MMO Market!", Body = "Tài khoản của bạn đã được kích hoạt. Khám phá hàng nghìn sản phẩm số chất lượng cao.", Link = "/marketplace", CreatedAt = now.AddDays(-7), IsRead = true },
+            new Notification { UserId = buyer.Id, Type = "wallet", Title = "Nạp ví thành công", Body = "Số dư ví của bạn đã được cộng 5.000.000₫ từ quà chào mừng.", Link = "/account/wallet", CreatedAt = now.AddDays(-7).AddSeconds(5), IsRead = true },
+            new Notification { UserId = buyer.Id, Type = "order",  Title = "Đơn hàng #MMK-1001 đã giao", Body = "Sản phẩm ChatGPT Plus 1 tháng đã được giao tự động. Vui lòng xác nhận nhận hàng.", Link = "/account/orders", CreatedAt = now.AddDays(-3), IsRead = true },
+            new Notification { UserId = buyer.Id, Type = "system", Title = "Flash Sale hôm nay — giảm đến 40%", Body = "Hàng trăm sản phẩm AI & tool đang giảm giá mạnh trong 24 giờ. Mua ngay trước khi hết!", Link = "/flash-sale", CreatedAt = now.AddDays(-1), IsRead = false },
+            new Notification { UserId = buyer.Id, Type = "wallet", Title = "Bạn nhận được 1.280 điểm tích lũy", Body = "Điểm thưởng từ các giao dịch đã được cộng vào tài khoản. Đổi ngay ưu đãi!", Link = "/account/loyalty", CreatedAt = now.AddHours(-5), IsRead = false },
+            new Notification { UserId = buyer.Id, Type = "dispute", Title = "Khiếu nại #DIS-001 đã được giải quyết", Body = "Admin đã xử lý khiếu nại của bạn. Tiền đã được hoàn vào ví.", Link = "/account/disputes", CreatedAt = now.AddHours(-2), IsRead = false }
+        );
+        await db.SaveChangesAsync(ct);
+    }
+
     /// <summary>
     /// Idempotently apply schema changes for entities added after initial DB creation.
     /// Uses raw SQL with IF NOT EXISTS so it is safe to run on every startup.
@@ -172,6 +211,240 @@ public static class Seeder
                 UpdatedAt TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS IX_WithdrawRequests_SellerUserId ON WithdrawRequests(SellerUserId);
+
+            CREATE TABLE IF NOT EXISTS WishlistItems (
+                Id TEXT NOT NULL CONSTRAINT PK_WishlistItems PRIMARY KEY,
+                UserId TEXT NOT NULL,
+                ProductId TEXT NOT NULL,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS IX_WishlistItems_UserId_ProductId ON WishlistItems(UserId, ProductId);
+
+            CREATE TABLE IF NOT EXISTS Notifications (
+                Id TEXT NOT NULL CONSTRAINT PK_Notifications PRIMARY KEY,
+                UserId TEXT NOT NULL,
+                Type TEXT NOT NULL,
+                Title TEXT NOT NULL,
+                Body TEXT NOT NULL,
+                Link TEXT NULL,
+                IsRead INTEGER NOT NULL DEFAULT 0,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NULL
+            );
+            CREATE INDEX IF NOT EXISTS IX_Notifications_UserId ON Notifications(UserId);
+            CREATE INDEX IF NOT EXISTS IX_Notifications_UserId_IsRead ON Notifications(UserId, IsRead);
+
+            CREATE TABLE IF NOT EXISTS Coupons (
+                Id TEXT NOT NULL CONSTRAINT PK_Coupons PRIMARY KEY,
+                Code TEXT NOT NULL,
+                Description TEXT NOT NULL,
+                Type INTEGER NOT NULL DEFAULT 1,
+                Value TEXT NOT NULL DEFAULT '0',
+                MinOrderAmount TEXT NOT NULL DEFAULT '0',
+                MaxDiscount TEXT NULL,
+                MaxUses INTEGER NOT NULL DEFAULT 0,
+                UsedCount INTEGER NOT NULL DEFAULT 0,
+                ExpiresAt TEXT NULL,
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS IX_Coupons_Code ON Coupons(Code);
+
+            CREATE TABLE IF NOT EXISTS CouponUsages (
+                Id TEXT NOT NULL CONSTRAINT PK_CouponUsages PRIMARY KEY,
+                CouponId TEXT NOT NULL,
+                UserId TEXT NOT NULL,
+                OrderId TEXT NULL,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS IX_CouponUsages_CouponId_UserId ON CouponUsages(CouponId, UserId);
+
+            CREATE TABLE IF NOT EXISTS Banners (
+                Id TEXT NOT NULL CONSTRAINT PK_Banners PRIMARY KEY,
+                Title TEXT NOT NULL,
+                Subtitle TEXT NOT NULL DEFAULT '',
+                LinkUrl TEXT NULL,
+                BgColor TEXT NOT NULL DEFAULT '#7c3aed',
+                TextColor TEXT NOT NULL DEFAULT '#ffffff',
+                Position INTEGER NOT NULL DEFAULT 0,
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                ClickCount INTEGER NOT NULL DEFAULT 0,
+                StartsAt TEXT NULL,
+                EndsAt TEXT NULL,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NULL
+            );
+            CREATE INDEX IF NOT EXISTS IX_Banners_Position ON Banners(Position);
+
+            CREATE TABLE IF NOT EXISTS FlashSales (
+                Id TEXT NOT NULL CONSTRAINT PK_FlashSales PRIMARY KEY,
+                Title TEXT NOT NULL,
+                DiscountPercent INTEGER NOT NULL DEFAULT 10,
+                StartsAt TEXT NOT NULL,
+                EndsAt TEXT NOT NULL,
+                Status TEXT NOT NULL DEFAULT 'Draft',
+                ProductCount INTEGER NOT NULL DEFAULT 0,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS SiteConfigs (
+                Key TEXT NOT NULL CONSTRAINT PK_SiteConfigs PRIMARY KEY,
+                Value TEXT NOT NULL,
+                UpdatedAt TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS LoyaltyRewards (
+                Id TEXT NOT NULL CONSTRAINT PK_LoyaltyRewards PRIMARY KEY,
+                Title TEXT NOT NULL,
+                Description TEXT NOT NULL DEFAULT '',
+                PointsCost INTEGER NOT NULL DEFAULT 100,
+                Type TEXT NOT NULL DEFAULT 'Voucher',
+                VoucherAmount TEXT NOT NULL DEFAULT '0',
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                IsComingSoon INTEGER NOT NULL DEFAULT 0,
+                Position INTEGER NOT NULL DEFAULT 0,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NULL
+            );
         ", ct);
+    }
+
+    private static async Task SeedDefaultConfigAsync(AppDbContext db, CancellationToken ct)
+    {
+        var defaults = new Dictionary<string, string>
+        {
+            // Fee & Loyalty
+            ["fee_rate"]               = "0.05",
+            ["loyalty_pts_per_1000"]   = "1",
+            ["loyalty_signup_bonus"]   = "100",
+            ["loyalty_review_bonus"]   = "50",
+            ["loyalty_referral_bonus"] = "200",
+            ["loyalty_tier_silver"]    = "1000",
+            ["loyalty_tier_gold"]      = "5000",
+            ["loyalty_tier_diamond"]   = "15000",
+            // Site info
+            ["site_name"]              = "MMO Market",
+            ["site_description"]       = "Sàn giao dịch tài khoản MMO, tool và dịch vụ số uy tín",
+            ["contact_email"]          = "support@mmomarket.vn",
+            ["contact_phone"]          = "",
+            // Operations
+            ["maintenance_mode"]       = "false",
+            ["maintenance_message"]    = "Hệ thống đang bảo trì, vui lòng quay lại sau.",
+            ["registration_enabled"]   = "true",
+            ["welcome_bonus"]          = "100000",
+            // Transaction rules
+            ["min_withdraw"]           = "50000",
+            ["max_withdraw"]           = "50000000",
+            ["escrow_release_days"]    = "3",
+            ["dispute_sla_hours"]      = "72",
+            ["kyc_required_to_sell"]   = "true",
+            // Payment
+            ["enabled_payments"]       = "Wallet,VietQr,Momo,ZaloPay,VnPay",
+        };
+
+        var existing = await db.SiteConfigs.Select(c => c.Key).ToListAsync(ct);
+        var missing = defaults.Where(kv => !existing.Contains(kv.Key))
+            .Select(kv => new Domain.Entities.SiteConfig { Key = kv.Key, Value = kv.Value })
+            .ToList();
+        if (missing.Count > 0)
+        {
+            db.SiteConfigs.AddRange(missing);
+            await db.SaveChangesAsync(ct);
+        }
+    }
+
+    private static async Task SeedDemoLoyaltyRewardsAsync(AppDbContext db, CancellationToken ct)
+    {
+        if (await db.LoyaltyRewards.AnyAsync(ct)) return;
+        db.LoyaltyRewards.AddRange(
+            new Domain.Entities.LoyaltyReward { Title = "Voucher 10.000₫",    Description = "Giảm thẳng vào đơn hàng bất kỳ",          PointsCost = 100,  Type = "Voucher",  VoucherAmount = 10000,  IsActive = true,  Position = 1 },
+            new Domain.Entities.LoyaltyReward { Title = "Voucher 50.000₫",    Description = "Áp dụng cho đơn từ 200.000₫",             PointsCost = 500,  Type = "Voucher",  VoucherAmount = 50000,  IsActive = true,  Position = 2 },
+            new Domain.Entities.LoyaltyReward { Title = "Voucher 100.000₫",   Description = "Áp dụng cho đơn từ 500.000₫",             PointsCost = 1000, Type = "Voucher",  VoucherAmount = 100000, IsActive = true,  Position = 3 },
+            new Domain.Entities.LoyaltyReward { Title = "Miễn phí giao hàng", Description = "Miễn phí mọi loại phí trên 1 đơn",        PointsCost = 200,  Type = "Shipping", VoucherAmount = 0,      IsActive = true,  Position = 4 },
+            new Domain.Entities.LoyaltyReward { Title = "Voucher 200.000₫",   Description = "Áp dụng cho đơn từ 1.000.000₫",           PointsCost = 2000, Type = "Voucher",  VoucherAmount = 200000, IsActive = true,  Position = 5 },
+            new Domain.Entities.LoyaltyReward { Title = "Tài khoản Premium",  Description = "1 tháng ChatGPT Plus (giao tự động)",      PointsCost = 5000, Type = "Product",  VoucherAmount = 0,      IsActive = false, IsComingSoon = true, Position = 6 }
+        );
+        await db.SaveChangesAsync(ct);
+    }
+
+    private static async Task SeedDemoBannersAsync(AppDbContext db, CancellationToken ct)
+    {
+        if (await db.Banners.AnyAsync(ct)) return;
+        var now = DateTime.UtcNow;
+        db.Banners.AddRange(
+            new Domain.Entities.Banner
+            {
+                Title = "Siêu Sale Tháng 5 🎉",
+                Subtitle = "Giảm đến 50% tài khoản AI & Tool cao cấp",
+                LinkUrl = "/products?category=ai",
+                BgColor = "#7c3aed",
+                TextColor = "#ffffff",
+                Position = 1,
+                IsActive = true,
+                StartsAt = now.AddDays(-10),
+                EndsAt = now.AddDays(20),
+            },
+            new Domain.Entities.Banner
+            {
+                Title = "ChatGPT 4o Premium",
+                Subtitle = "Tài khoản chính hãng, giao tự động 24/7",
+                LinkUrl = "/products?category=ai",
+                BgColor = "#0ea5e9",
+                TextColor = "#ffffff",
+                Position = 2,
+                IsActive = true,
+            },
+            new Domain.Entities.Banner
+            {
+                Title = "Flash Sale Cuối Tuần",
+                Subtitle = "Mỗi thứ 7 & CN giảm thêm 20% tất cả sản phẩm",
+                LinkUrl = "/flash-sale",
+                BgColor = "#ef4444",
+                TextColor = "#ffffff",
+                Position = 3,
+                IsActive = false,
+            }
+        );
+        await db.SaveChangesAsync(ct);
+    }
+
+    private static async Task SeedDemoFlashSalesAsync(AppDbContext db, CancellationToken ct)
+    {
+        if (await db.FlashSales.AnyAsync(ct)) return;
+        var now = DateTime.UtcNow;
+        db.FlashSales.AddRange(
+            new Domain.Entities.FlashSale
+            {
+                Title = "Flash Sale Khai Trương",
+                DiscountPercent = 30,
+                StartsAt = now.AddDays(-30),
+                EndsAt = now.AddDays(-20),
+                Status = "Ended",
+                ProductCount = 12,
+            },
+            new Domain.Entities.FlashSale
+            {
+                Title = "Khuyến Mãi Tháng 5",
+                DiscountPercent = 15,
+                StartsAt = now.AddDays(-5),
+                EndsAt = now.AddDays(10),
+                Status = "Active",
+                ProductCount = 8,
+            },
+            new Domain.Entities.FlashSale
+            {
+                Title = "Mega Sale 6/6",
+                DiscountPercent = 50,
+                StartsAt = now.AddDays(5),
+                EndsAt = now.AddDays(6),
+                Status = "Draft",
+                ProductCount = 0,
+            }
+        );
+        await db.SaveChangesAsync(ct);
     }
 }

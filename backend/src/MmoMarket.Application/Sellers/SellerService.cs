@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using MmoMarket.Application.Catalog;
 using MmoMarket.Application.Common;
+using MmoMarket.Application.Config;
 using MmoMarket.Domain.Entities;
 using MmoMarket.Domain.Enums;
 
@@ -45,7 +46,8 @@ public record SellerDashboardDto(
 public class SellerService
 {
     private readonly IAppDbContext _db;
-    public SellerService(IAppDbContext db) => _db = db;
+    private readonly ConfigService _config;
+    public SellerService(IAppDbContext db, ConfigService config) { _db = db; _config = config; }
 
     private async Task<Seller> GetSellerForUserAsync(Guid userId, CancellationToken ct)
     {
@@ -58,10 +60,12 @@ public class SellerService
     {
         var seller = await GetSellerForUserAsync(userId, ct);
         var since = DateTime.UtcNow.AddDays(-30);
-        var revenue30d = await _db.OrderLines
+        var revenue30dList = await _db.OrderLines
             .Include(l => l.Order)
             .Where(l => l.SellerId == seller.Id && l.Order!.Status == OrderStatus.Completed && l.Order.CompletedAt >= since)
-            .SumAsync(l => (decimal?)(l.UnitPrice * l.Quantity), ct) ?? 0m;
+            .Select(l => l.UnitPrice * l.Quantity)
+            .ToListAsync(ct);
+        var revenue30d = revenue30dList.Sum();
         var orders30d = await _db.OrderLines
             .Include(l => l.Order)
             .Where(l => l.SellerId == seller.Id && l.Order!.CreatedAt >= since)
@@ -73,14 +77,19 @@ public class SellerService
             .CountAsync(l => l.SellerId == seller.Id && (l.Order!.Status == OrderStatus.Paid || l.Order.Status == OrderStatus.Processing) && l.Delivery != DeliveryMethod.Auto, ct);
         var openDisputes = await _db.Disputes.CountAsync(d => d.SellerId == seller.Id && (d.Status == DisputeStatus.Open || d.Status == DisputeStatus.Investigating), ct);
         var pendingWd = await _db.WithdrawRequests.CountAsync(w => w.SellerUserId == userId && w.Status == WithdrawStatus.Pending, ct);
-        var sellerCommission = 0.95m; // 5% platform fee
-        var totalEarned = await _db.OrderLines
+        var feeRate = await _config.GetDecimalAsync(ConfigKeys.FeeRate, 0.05m, ct);
+        var sellerCommission = 1m - feeRate;
+        var earnedList = await _db.OrderLines
             .Include(l => l.Order)
             .Where(l => l.SellerId == seller.Id && l.Order!.Status == OrderStatus.Completed)
-            .SumAsync(l => (decimal?)(l.UnitPrice * l.Quantity * sellerCommission), ct) ?? 0m;
-        var totalWithdrawn = await _db.WithdrawRequests
+            .Select(l => l.UnitPrice * l.Quantity)
+            .ToListAsync(ct);
+        var totalEarned = earnedList.Sum() * sellerCommission;
+        var withdrawnList = await _db.WithdrawRequests
             .Where(w => w.SellerUserId == userId && (w.Status == WithdrawStatus.Approved || w.Status == WithdrawStatus.Paid))
-            .SumAsync(w => (decimal?)w.Amount, ct) ?? 0m;
+            .Select(w => w.Amount)
+            .ToListAsync(ct);
+        var totalWithdrawn = withdrawnList.Sum();
         var available = Math.Max(0m, totalEarned - totalWithdrawn);
         return new SellerDashboardDto(revenue30d, orders30d, prodActive, prodPending, awaiting, openDisputes, pendingWd, available);
     }

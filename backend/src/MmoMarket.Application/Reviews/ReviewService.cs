@@ -6,8 +6,8 @@ using MmoMarket.Domain.Enums;
 namespace MmoMarket.Application.Reviews;
 
 public record ReviewCreateDto(Guid OrderId, Guid ProductId, int Rating, string Comment);
-
-public record OwnReviewDto(Guid Id, Guid ProductId, string ProductTitle, int Rating, string Comment, DateTime CreatedAt, string? Reply);
+public record ReviewUpdateDto(int Rating, string Comment);
+public record OwnReviewDto(Guid Id, Guid ProductId, string ProductTitle, string? ProductSlug, int Rating, string Comment, DateTime CreatedAt, string? Reply);
 
 public class ReviewService
 {
@@ -68,12 +68,35 @@ public class ReviewService
 
         await _db.SaveChangesAsync(ct);
 
-        return new OwnReviewDto(review.Id, review.ProductId, product?.Title ?? "", review.Rating, review.Comment, review.CreatedAt, review.Reply);
+        return new OwnReviewDto(review.Id, review.ProductId, product?.Title ?? "", product?.Slug, review.Rating, review.Comment, review.CreatedAt, review.Reply);
     }
 
     public async Task<OwnReviewDto[]> GetMineAsync(Guid userId, CancellationToken ct)
     {
         var reviews = await _db.Reviews.Include(r => r.Product).Where(r => r.UserId == userId).OrderByDescending(r => r.CreatedAt).ToListAsync(ct);
-        return reviews.Select(r => new OwnReviewDto(r.Id, r.ProductId, r.Product?.Title ?? "", r.Rating, r.Comment, r.CreatedAt, r.Reply)).ToArray();
+        return reviews.Select(r => new OwnReviewDto(r.Id, r.ProductId, r.Product?.Title ?? "", r.Product?.Slug, r.Rating, r.Comment, r.CreatedAt, r.Reply)).ToArray();
+    }
+
+    public async Task<OwnReviewDto> UpdateAsync(Guid userId, Guid reviewId, ReviewUpdateDto dto, CancellationToken ct)
+    {
+        if (dto.Rating < 1 || dto.Rating > 5) throw new AppException("Rating phải từ 1-5");
+        if (string.IsNullOrWhiteSpace(dto.Comment)) throw new AppException("Vui lòng nhập nhận xét");
+
+        var review = await _db.Reviews.Include(r => r.Product)
+            .FirstOrDefaultAsync(r => r.Id == reviewId && r.UserId == userId, ct)
+            ?? throw new AppException("Không tìm thấy đánh giá", 404);
+
+        review.Rating = dto.Rating;
+        review.Comment = dto.Comment.Trim();
+
+        var product = review.Product;
+        if (product != null)
+        {
+            var productReviews = await _db.Reviews.Where(r => r.ProductId == product.Id).ToListAsync(ct);
+            product.Rating = Math.Round(productReviews.Average(r => (double)r.Rating), 2);
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return new OwnReviewDto(review.Id, review.ProductId, product?.Title ?? "", product?.Slug, review.Rating, review.Comment, review.CreatedAt, review.Reply);
     }
 }

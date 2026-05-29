@@ -19,6 +19,14 @@ public interface IAppDbContext
     DbSet<DisputeMessage> DisputeMessages { get; }
     DbSet<KycSubmission> KycSubmissions { get; }
     DbSet<WithdrawRequest> WithdrawRequests { get; }
+    DbSet<WishlistItem> WishlistItems { get; }
+    DbSet<Notification> Notifications { get; }
+    DbSet<Coupon> Coupons { get; }
+    DbSet<CouponUsage> CouponUsages { get; }
+    DbSet<Banner> Banners { get; }
+    DbSet<FlashSale> FlashSales { get; }
+    DbSet<SiteConfig> SiteConfigs { get; }
+    DbSet<LoyaltyReward> LoyaltyRewards { get; }
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }
 

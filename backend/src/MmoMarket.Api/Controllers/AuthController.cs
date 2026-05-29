@@ -26,4 +26,20 @@ public class AuthController : ControllerBase
         if (_user.UserId is not { } id) throw new AppException("Unauthorized", 401);
         return await _svc.MeAsync(id, ct);
     }
+
+    [HttpPut("profile")]
+    [Authorize]
+    public async Task<UserDto> UpdateProfile([FromBody] UpdateProfileDto dto, CancellationToken ct)
+    {
+        if (_user.UserId is not { } id) throw new AppException("Unauthorized", 401);
+        return await _svc.UpdateProfileAsync(id, dto, ct);
+    }
+
+    [HttpPut("password")]
+    [Authorize]
+    public async Task ChangePassword([FromBody] ChangePasswordDto dto, CancellationToken ct)
+    {
+        if (_user.UserId is not { } id) throw new AppException("Unauthorized", 401);
+        await _svc.ChangePasswordAsync(id, dto, ct);
+    }
 }

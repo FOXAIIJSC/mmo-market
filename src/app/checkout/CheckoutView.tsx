@@ -2,11 +2,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Wallet, QrCode, CreditCard, Bitcoin, ShieldCheck, Loader2, AlertCircle } from "lucide-react";
+import { Wallet, QrCode, CreditCard, Bitcoin, ShieldCheck, Loader2, AlertCircle, CheckCircle2, Tag, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/lib/AuthContext";
 import { apiFetch } from "@/lib/api";
-import type { ApiCart, ApiOrder } from "@/lib/apiTypes";
+import type { ApiCart, ApiOrder, ApiValidateResult } from "@/lib/apiTypes";
 import { formatVND } from "@/lib/format";
 
 type PaymentMethodOption = {
@@ -36,6 +36,10 @@ export function CheckoutView() {
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [couponInput, setCouponInput] = useState("");
+  const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number; message: string } | null>(null);
+  const [couponChecking, setCouponChecking] = useState(false);
+  const [couponErr, setCouponErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !token) {
@@ -49,6 +53,31 @@ export function CheckoutView() {
       .finally(() => setLoading(false));
   }, [token, authLoading, router]);
 
+  const applyCoupon = async () => {
+    if (!token || !couponInput.trim() || !cart) return;
+    setCouponChecking(true);
+    setCouponErr(null);
+    try {
+      const result = await apiFetch<ApiValidateResult>("/api/coupons/validate", {
+        method: "POST",
+        token,
+        body: JSON.stringify({ code: couponInput.trim(), orderAmount: cart.subtotal }),
+      });
+      if (result.valid) {
+        setCouponApplied({ code: couponInput.trim().toUpperCase(), discount: result.discount, message: result.message ?? "" });
+        setCouponInput("");
+      } else {
+        setCouponErr(result.error ?? "Mã không hợp lệ");
+      }
+    } catch (e) {
+      setCouponErr(e instanceof Error ? e.message : "Lỗi kiểm tra mã");
+    } finally {
+      setCouponChecking(false);
+    }
+  };
+
+  const removeCoupon = () => { setCouponApplied(null); setCouponErr(null); };
+
   const placeOrder = async () => {
     if (!token) return;
     setSubmitting(true);
@@ -57,7 +86,7 @@ export function CheckoutView() {
       const order = await apiFetch<ApiOrder>("/api/orders/checkout", {
         method: "POST",
         token,
-        body: JSON.stringify({ paymentMethod: method, note }),
+        body: JSON.stringify({ paymentMethod: method, note, couponCode: couponApplied?.code ?? null }),
       });
       await refresh();
       router.push(`/account/orders?just=${order.id}`);
@@ -85,7 +114,8 @@ export function CheckoutView() {
   }
 
   const fee = methods.find((m) => m.v === method)?.fee ?? 0;
-  const total = cart.subtotal + fee;
+  const discount = couponApplied?.discount ?? 0;
+  const total = cart.subtotal - discount + fee;
   const canPay = method !== "Wallet" || (user && user.walletBalance >= total);
 
   return (
@@ -132,6 +162,46 @@ export function CheckoutView() {
           </div>
         </div>
 
+        {/* Coupon input */}
+        <div className="rounded-2xl border border-border bg-bg-card p-5">
+          <h2 className="mb-3 text-base font-bold text-text">Mã giảm giá</h2>
+          {couponApplied ? (
+            <div className="flex items-center justify-between rounded-xl border border-success/40 bg-success/10 px-4 py-3">
+              <div className="flex items-center gap-2 text-sm text-success">
+                <CheckCircle2 className="size-4" />
+                <span className="font-mono font-bold">{couponApplied.code}</span>
+                <span className="text-xs">{couponApplied.message}</span>
+              </div>
+              <button onClick={removeCoupon} className="text-text-muted hover:text-danger">
+                <X className="size-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Tag className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-muted" />
+                  <input
+                    value={couponInput}
+                    onChange={(e) => { setCouponInput(e.target.value.toUpperCase()); setCouponErr(null); }}
+                    onKeyDown={(e) => e.key === "Enter" && applyCoupon()}
+                    placeholder="Nhập mã giảm giá..."
+                    className="h-10 w-full rounded-lg border border-border bg-bg-elev pl-9 pr-3 font-mono text-sm uppercase text-text outline-none focus:border-brand"
+                  />
+                </div>
+                <Button variant="outline" onClick={applyCoupon} disabled={couponChecking || !couponInput.trim()}>
+                  {couponChecking ? <Loader2 className="size-4 animate-spin" /> : "Áp dụng"}
+                </Button>
+              </div>
+              {couponErr && (
+                <p className="flex items-center gap-1.5 text-xs text-danger">
+                  <AlertCircle className="size-3.5" />{couponErr}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
         <div className="rounded-2xl border border-border bg-bg-card p-5">
           <h2 className="mb-3 text-base font-bold text-text">Ghi chú đơn hàng (tuỳ chọn)</h2>
           <textarea
@@ -163,6 +233,12 @@ export function CheckoutView() {
           </div>
           <div className="space-y-1.5 border-t border-border pt-3 text-sm">
             <div className="flex justify-between text-text-muted"><span>Tạm tính</span><span className="num text-text">{formatVND(cart.subtotal)}</span></div>
+            {discount > 0 && (
+              <div className="flex justify-between text-success">
+                <span className="flex items-center gap-1"><Tag className="size-3.5" />Giảm giá ({couponApplied?.code})</span>
+                <span className="num font-semibold">-{formatVND(discount)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-text-muted"><span>Phí gateway</span><span className="num text-text">{fee > 0 ? formatVND(fee) : "Miễn phí"}</span></div>
           </div>
           <div className="flex items-center justify-between border-t border-border pt-3">

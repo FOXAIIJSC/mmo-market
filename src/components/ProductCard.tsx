@@ -4,6 +4,7 @@ import type { Product } from "@/lib/types";
 import { sellers } from "@/lib/data";
 import { formatNumber, formatVND, pct } from "@/lib/format";
 import { cn } from "@/lib/cn";
+import { WishlistButton } from "./WishlistButton";
 
 export function ProductCard({ product, compact }: { product: Product; compact?: boolean }) {
   const seller = product.seller || sellers.find((s) => s.id === product.sellerId);
@@ -66,6 +67,12 @@ export function ProductCard({ product, compact }: { product: Product; compact?: 
             </span>
           )}
         </div>
+
+        {/* Wishlist button */}
+        <WishlistButton
+          productId={product.id}
+          className="absolute right-2 bottom-2 size-7 backdrop-blur"
+        />
 
         {/* Delivery badge */}
         <div className="absolute right-2 top-2">

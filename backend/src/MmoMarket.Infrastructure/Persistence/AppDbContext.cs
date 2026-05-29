@@ -23,6 +23,14 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<DisputeMessage> DisputeMessages => Set<DisputeMessage>();
     public DbSet<KycSubmission> KycSubmissions => Set<KycSubmission>();
     public DbSet<WithdrawRequest> WithdrawRequests => Set<WithdrawRequest>();
+    public DbSet<WishlistItem> WishlistItems => Set<WishlistItem>();
+    public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<Coupon> Coupons => Set<Coupon>();
+    public DbSet<CouponUsage> CouponUsages => Set<CouponUsage>();
+    public DbSet<Banner> Banners => Set<Banner>();
+    public DbSet<FlashSale> FlashSales => Set<FlashSale>();
+    public DbSet<SiteConfig> SiteConfigs => Set<SiteConfig>();
+    public DbSet<LoyaltyReward> LoyaltyRewards => Set<LoyaltyReward>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -106,6 +114,48 @@ public class AppDbContext : DbContext, IAppDbContext
         {
             e.Property(x => x.Amount).HasColumnType("decimal(18,2)");
             e.HasOne(x => x.SellerUser).WithMany().HasForeignKey(x => x.SellerUserId);
+        });
+
+        b.Entity<WishlistItem>(e =>
+        {
+            e.HasIndex(x => new { x.UserId, x.ProductId }).IsUnique();
+            e.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<Notification>(e =>
+        {
+            e.HasIndex(x => x.UserId);
+            e.HasIndex(x => new { x.UserId, x.IsRead });
+        });
+
+        b.Entity<Coupon>(e =>
+        {
+            e.HasIndex(x => x.Code).IsUnique();
+            e.Property(x => x.Value).HasColumnType("decimal(18,2)");
+            e.Property(x => x.MinOrderAmount).HasColumnType("decimal(18,2)");
+            e.Property(x => x.MaxDiscount).HasColumnType("decimal(18,2)");
+        });
+
+        b.Entity<CouponUsage>(e =>
+        {
+            e.HasIndex(x => new { x.CouponId, x.UserId }).IsUnique();
+            e.HasOne(x => x.Coupon).WithMany(c => c.Usages).HasForeignKey(x => x.CouponId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<Banner>(e =>
+        {
+            e.HasIndex(x => x.Position);
+        });
+
+        b.Entity<SiteConfig>(e =>
+        {
+            e.HasKey(x => x.Key);
+        });
+
+        b.Entity<LoyaltyReward>(e =>
+        {
+            e.HasIndex(x => x.Position);
+            e.Property(x => x.VoucherAmount).HasColumnType("decimal(18,2)");
         });
     }
 

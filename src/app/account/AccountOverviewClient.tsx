@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowRight, Gift, Loader2, Package, ShoppingBag, Users, Wallet } from "lucide-react";
 import { OrderStatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/Button";
@@ -24,11 +25,16 @@ const statusMap: Record<string, OrderStatus> = {
 
 export function AccountOverviewClient() {
   const { user, token, loading: authLoading } = useAuth();
+  const router = useRouter();
   const [orders, setOrders] = useState<ApiOrder[]>([]);
   const [wallet, setWallet] = useState<ApiWalletState | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!authLoading && user && (user.role === "Admin" || user.role === "SuperAdmin")) {
+      router.replace("/admin");
+      return;
+    }
     if (!token) {
       setLoading(false);
       return;
@@ -40,7 +46,7 @@ export function AccountOverviewClient() {
       .then(([o, w]) => { setOrders(o); setWallet(w); })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [token]);
+  }, [token, authLoading, user, router]);
 
   if (authLoading || loading) {
     return <div className="grid place-items-center py-20"><Loader2 className="size-6 animate-spin text-text-muted" /></div>;

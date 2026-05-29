@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MmoMarket.Application.Common;
+using MmoMarket.Application.Notifications;
 using MmoMarket.Domain.Entities;
 using MmoMarket.Domain.Enums;
 
@@ -12,7 +13,8 @@ public record WalletStateDto(decimal Balance, decimal HeldBalance, int LoyaltyPo
 public class WalletService
 {
     private readonly IAppDbContext _db;
-    public WalletService(IAppDbContext db) => _db = db;
+    private readonly NotificationService _notify;
+    public WalletService(IAppDbContext db, NotificationService notify) { _db = db; _notify = notify; }
 
     public async Task<WalletStateDto> GetAsync(Guid userId, CancellationToken ct)
     {
@@ -23,9 +25,11 @@ public class WalletService
             .OrderByDescending(t => t.CreatedAt)
             .Take(50)
             .ToListAsync(ct);
-        var held = await _db.Orders
+        var heldTotals = await _db.Orders
             .Where(o => o.BuyerId == userId && (o.Status == OrderStatus.Paid || o.Status == OrderStatus.Processing || o.Status == OrderStatus.Delivered))
-            .SumAsync(o => (decimal?)o.Total, ct) ?? 0m;
+            .Select(o => o.Total)
+            .ToListAsync(ct);
+        var held = heldTotals.Sum();
         return new WalletStateDto(user.WalletBalance, held, user.LoyaltyPoints,
             txns.Select(t => new WalletTxnDto(t.Id, t.Type.ToString(), t.Status.ToString(), t.Amount, t.Note, t.CreatedAt)).ToArray());
     }
@@ -45,6 +49,9 @@ public class WalletService
             Note = $"Nạp ví qua {dto.Method}",
         });
         await _db.SaveChangesAsync(ct);
+        await _notify.CreateAsync(userId, "wallet", "Nạp ví thành công",
+            $"Số dư ví của bạn đã được cộng {dto.Amount:N0}₫ qua {dto.Method}.",
+            "/account/wallet", ct);
         return await GetAsync(userId, ct);
     }
 }

@@ -1,12 +1,14 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using MmoMarket.Application.Common;
+using MmoMarket.Application.Config;
+using MmoMarket.Application.Coupons;
 using MmoMarket.Domain.Entities;
 using MmoMarket.Domain.Enums;
 
 namespace MmoMarket.Application.Orders;
 
-public record CheckoutDto(string PaymentMethod, string? Note);
+public record CheckoutDto(string PaymentMethod, string? Note, string? CouponCode);
 public record OrderLineDto(Guid Id, Guid ProductId, string Title, decimal UnitPrice, int Quantity, string Delivery, string[]? DeliveredItems);
 public record OrderDto(
     Guid Id,
@@ -27,7 +29,9 @@ public record OrderDto(
 public class OrderService
 {
     private readonly IAppDbContext _db;
-    public OrderService(IAppDbContext db) => _db = db;
+    private readonly CouponService _coupon;
+    private readonly ConfigService _config;
+    public OrderService(IAppDbContext db, CouponService coupon, ConfigService config) { _db = db; _coupon = coupon; _config = config; }
 
     public async Task<OrderDto> CheckoutAsync(Guid userId, CheckoutDto dto, CancellationToken ct)
     {
@@ -44,8 +48,14 @@ public class OrderService
             ?? throw new AppException("User không tồn tại", 404);
 
         var subtotal = cartItems.Sum(c => c.Product!.Price * c.Quantity);
-        var discount = 0m;
         var fee = 0m;
+        var discount = 0m;
+        if (!string.IsNullOrWhiteSpace(dto.CouponCode))
+        {
+            var v = await _coupon.ValidateAsync(userId, dto.CouponCode, subtotal, ct);
+            if (!v.Valid) throw new AppException(v.Error ?? "Mã giảm giá không hợp lệ");
+            discount = v.Discount;
+        }
         var total = subtotal - discount + fee;
 
         if (method == PaymentMethod.Wallet)
@@ -100,6 +110,10 @@ public class OrderService
 
         _db.CartItems.RemoveRange(cartItems);
         await _db.SaveChangesAsync(ct);
+
+        if (!string.IsNullOrWhiteSpace(dto.CouponCode))
+            await _coupon.RecordUsageAsync(userId, dto.CouponCode, order.Id, ct);
+
         return await GetByIdInternalAsync(order.Id, ct) ?? throw new AppException("Lỗi tạo đơn");
     }
 
@@ -144,7 +158,11 @@ public class OrderService
             if (seller != null) seller.TotalSold += line.Quantity;
         }
         var buyer = await _db.Users.FirstOrDefaultAsync(u => u.Id == order.BuyerId, ct);
-        if (buyer != null) buyer.LoyaltyPoints += (int)(order.Total / 1000);
+        if (buyer != null)
+        {
+            var ptsRate = await _config.GetIntAsync(ConfigKeys.LoyaltyPtsPer1000, 1, ct);
+            buyer.LoyaltyPoints += (int)(order.Total / 1000) * ptsRate;
+        }
     }
 
     public async Task<OrderDto[]> GetMyOrdersAsync(Guid userId, string? status, CancellationToken ct)

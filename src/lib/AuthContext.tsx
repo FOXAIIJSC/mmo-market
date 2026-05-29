@@ -10,8 +10,8 @@ type AuthCtx = {
   user: ApiUser | null;
   token: string | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, username: string, displayName: string, referralCode?: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<ApiUser>;
+  register: (email: string, password: string, username: string, displayName: string, referralCode?: string) => Promise<ApiUser>;
   logout: () => void;
   refresh: () => Promise<void>;
 };
@@ -45,20 +45,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(u);
   };
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string): Promise<ApiUser> => {
     const res = await apiFetch<ApiAuthResponse>("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
     persist(res.accessToken, res.user);
+    return res.user;
   }, []);
 
-  const register = useCallback(async (email: string, password: string, username: string, displayName: string, referralCode?: string) => {
+  const register = useCallback(async (email: string, password: string, username: string, displayName: string, referralCode?: string): Promise<ApiUser> => {
     const res = await apiFetch<ApiAuthResponse>("/api/auth/register", {
       method: "POST",
       body: JSON.stringify({ email, password, username, displayName, referralCode }),
     });
     persist(res.accessToken, res.user);
+    return res.user;
   }, []);
 
   const refresh = useCallback(async () => {

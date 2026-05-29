@@ -81,3 +81,9 @@ public enum ProductStatus
     Hidden = 4,
     OutOfStock = 5
 }
+
+public enum CouponType
+{
+    Percent = 0,   // Value = percentage, e.g. 10 = 10%
+    Fixed   = 1,   // Value = fixed amount in VND
+}

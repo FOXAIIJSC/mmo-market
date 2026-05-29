@@ -1,7 +1,8 @@
+import { AdminGuard } from "@/components/AdminGuard";
 import { AdminProductsClient } from "./AdminProductsClient";
 
 export const metadata = { title: "Duyệt sản phẩm | Admin" };
 
 export default function AdminProductsPage() {
-  return <AdminProductsClient />;
+  return <AdminGuard><AdminProductsClient /></AdminGuard>;
 }

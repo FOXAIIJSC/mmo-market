@@ -73,6 +73,7 @@ export type ApiUser = {
   loyaltyPoints: number;
   kycStatus: string;
   avatarColor: string;
+  phoneNumber?: string | null;
 };
 
 export type ApiAuthResponse = {
@@ -219,15 +220,46 @@ export type ApiSellerDashboard = {
   availableBalance: number;
 };
 
+export type ApiAdminOrderLine = {
+  id: string;
+  productId: string;
+  title: string;
+  unitPrice: number;
+  quantity: number;
+  delivery: string;
+};
+
+export type ApiAdminOrder = {
+  id: string;
+  code: string;
+  status: string;
+  paymentMethod: string;
+  subtotal: number;
+  discount: number;
+  fee: number;
+  total: number;
+  buyerUsername: string;
+  buyerEmail: string;
+  buyerAvatarColor: string;
+  note?: string | null;
+  createdAt: string;
+  paidAt?: string | null;
+  deliveredAt?: string | null;
+  completedAt?: string | null;
+  lines: ApiAdminOrderLine[];
+};
+
 export type ApiAdminUser = {
   id: string;
   email: string;
   username: string;
   displayName: string;
   role: string;
+  avatarColor: string;
   walletBalance: number;
   loyaltyPoints: number;
   kycStatus: string;
+  phoneNumber?: string | null;
   createdAt: string;
 };
 
@@ -268,6 +300,37 @@ export type ApiAdminMetrics = {
   productsPending: number;
   openDisputes: number;
   pendingWithdrawals: number;
+};
+
+export type KvInt     = { key: string; value: number };
+export type KvDecimal = { key: string; value: number };
+export type TopUserDto    = { username: string; avatarColor: string; total: number; orderCount: number };
+export type TopProductDto = { title: string; sold: number; price: number; sellerUsername: string };
+
+export type ApiAdminReport = {
+  totalUsers: number;
+  totalSellers: number;
+  totalWalletBalance: number;
+  userByRole: KvInt[];
+  userByKyc: KvInt[];
+  totalOrders: number;
+  totalGmv: number;
+  totalRevenue: number;
+  orderByStatus: KvInt[];
+  orderByPayment: KvInt[];
+  revenueByPayment: KvDecimal[];
+  topBuyers: TopUserDto[];
+  totalProducts: number;
+  totalSold: number;
+  productByStatus: KvInt[];
+  productByCategory: KvInt[];
+  topProducts: TopProductDto[];
+  totalTopup: number;
+  totalPurchase: number;
+  totalRefund: number;
+  totalWithdraw: number;
+  totalDisputes: number;
+  disputeByStatus: KvInt[];
 };
 
 export type ApiKycSubmission = {
@@ -322,6 +385,7 @@ export type ApiOwnReview = {
   id: string;
   productId: string;
   productTitle: string;
+  productSlug?: string | null;
   rating: number;
   comment: string;
   createdAt: string;
@@ -354,5 +418,126 @@ export type ApiAdminWalletTxn = {
   status: string;
   amount: number;
   note: string;
+  createdAt: string;
+};
+
+export type ApiCoupon = {
+  id: string;
+  code: string;
+  description: string;
+  type: "Percent" | "Fixed";
+  value: number;
+  minOrderAmount: number;
+  maxDiscount?: number | null;
+  maxUses: number;
+  usedCount: number;
+  expiresAt?: string | null;
+  isActive: boolean;
+  usedByMe: boolean;
+};
+
+export type ApiValidateResult = {
+  valid: boolean;
+  error?: string | null;
+  discount: number;
+  message?: string | null;
+};
+
+export type ApiWishlistItem = {
+  id: string;
+  slug: string;
+  title: string;
+  categorySlug: string;
+  price: number;
+  comparePrice?: number | null;
+  thumbnailColor: string;
+  thumbnailIcon?: string | null;
+  rating: number;
+  reviewCount: number;
+  sold: number;
+  delivery: string;
+  warrantyDays: number;
+  sellerUsername: string;
+  sellerAvatarColor: string;
+  addedAt: string;
+};
+
+export type ApiNotification = {
+  id: string;
+  type: string;       // order | wallet | review | dispute | kyc | system
+  title: string;
+  body: string;
+  link?: string | null;
+  isRead: boolean;
+  createdAt: string;
+};
+
+export type ApiSystemSettings = {
+  siteName: string;
+  siteDescription: string;
+  contactEmail: string;
+  contactPhone: string;
+  maintenanceMode: boolean;
+  maintenanceMessage: string;
+  registrationEnabled: boolean;
+  welcomeBonus: number;
+  minWithdraw: number;
+  maxWithdraw: number;
+  escrowReleaseDays: number;
+  disputeSlaHours: number;
+  kycRequiredToSell: boolean;
+  enabledPayments: string[];
+};
+
+export type ApiFeeConfig = {
+  feePercent: number;
+};
+
+export type ApiLoyaltyConfig = {
+  ptsPer1000: number;
+  signupBonus: number;
+  reviewBonus: number;
+  referralBonus: number;
+  tierSilver: number;
+  tierGold: number;
+  tierDiamond: number;
+};
+
+export type ApiLoyaltyReward = {
+  id: string;
+  title: string;
+  description: string;
+  pointsCost: number;
+  type: "Voucher" | "Shipping" | "Product";
+  voucherAmount: number;
+  isActive: boolean;
+  isComingSoon: boolean;
+  position: number;
+  createdAt: string;
+};
+
+export type ApiBanner = {
+  id: string;
+  title: string;
+  subtitle: string;
+  linkUrl?: string | null;
+  bgColor: string;
+  textColor: string;
+  position: number;
+  isActive: boolean;
+  clickCount: number;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  createdAt: string;
+};
+
+export type ApiFlashSale = {
+  id: string;
+  title: string;
+  discountPercent: number;
+  startsAt: string;
+  endsAt: string;
+  status: "Draft" | "Active" | "Ended";
+  productCount: number;
   createdAt: string;
 };
