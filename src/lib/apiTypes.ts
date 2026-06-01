@@ -137,6 +137,14 @@ export type ApiVNPayResult = {
   paymentUrl: string;
 };
 
+export type ApiVietQrResult = {
+  qrImageUrl: string;
+  bankId: string;
+  accountNo: string;
+  accountName: string;
+  transferNote: string;
+};
+
 export type ApiWalletTxn = {
   id: string;
   type: string;

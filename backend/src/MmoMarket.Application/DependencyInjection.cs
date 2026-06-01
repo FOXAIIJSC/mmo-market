@@ -39,6 +39,7 @@ public static class DependencyInjection
         services.AddScoped<MoMoService>();
         services.AddScoped<ZaloPayService>();
         services.AddScoped<VNPayService>();
+        services.AddScoped<VietQrService>();
         return services;
     }
 }

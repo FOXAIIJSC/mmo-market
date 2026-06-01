@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/Button";
 import { MoMoPayModal } from "@/components/MoMoPayModal";
 import { ZaloPayModal } from "@/components/ZaloPayModal";
 import { VNPayModal } from "@/components/VNPayModal";
+import { VietQrModal } from "@/components/VietQrModal";
 import { useAuth } from "@/lib/AuthContext";
 import { apiFetch } from "@/lib/api";
-import type { ApiCart, ApiMoMoPayResult, ApiOrder, ApiValidateResult, ApiVNPayResult, ApiZaloPayResult } from "@/lib/apiTypes";
+import type { ApiCart, ApiMoMoPayResult, ApiOrder, ApiValidateResult, ApiVietQrResult, ApiVNPayResult, ApiZaloPayResult } from "@/lib/apiTypes";
 import { formatVND } from "@/lib/format";
 
 type PaymentMethodOption = {
@@ -23,7 +24,7 @@ type PaymentMethodOption = {
 
 const methods: PaymentMethodOption[] = [
   { v: "Wallet", label: "Ví nội bộ MMO", desc: "Trừ trực tiếp số dư ví — duyệt tức thời", icon: Wallet, fee: 0, badge: "Khuyến nghị" },
-  { v: "VietQr", label: "VietQR / Chuyển khoản", desc: "Mock — sẽ ghi nhận khi tích hợp SePay", icon: QrCode, fee: 0 },
+  { v: "VietQr", label: "VietQR / Chuyển khoản", desc: "Chuyển khoản ngân hàng — tự động xác nhận qua SePay", icon: QrCode, fee: 0 },
   { v: "Momo", label: "Ví MoMo", desc: "Quét mã QR hoặc đăng nhập MoMo để thanh toán", icon: Wallet, fee: 0 },
   { v: "ZaloPay", label: "ZaloPay", desc: "Quét mã QR hoặc đăng nhập ZaloPay để thanh toán", icon: Wallet, fee: 0 },
   { v: "VnPay", label: "VNPay", desc: "Thanh toán qua cổng VNPay — ATM nội địa, Visa/Master, QR Code", icon: CreditCard, fee: 5_000 },
@@ -46,6 +47,7 @@ export function CheckoutView() {
   const [momoModal, setMomoModal] = useState<{ order: ApiOrder; result: ApiMoMoPayResult } | null>(null);
   const [zaloModal, setZaloModal] = useState<{ order: ApiOrder; result: ApiZaloPayResult } | null>(null);
   const [vnpayModal, setVnpayModal] = useState<{ order: ApiOrder; result: ApiVNPayResult } | null>(null);
+  const [vietqrModal, setVietqrModal] = useState<{ order: ApiOrder; result: ApiVietQrResult } | null>(null);
 
   useEffect(() => {
     if (!authLoading && !token) {
@@ -95,7 +97,14 @@ export function CheckoutView() {
         body: JSON.stringify({ paymentMethod: method, note, couponCode: couponApplied?.code ?? null }),
       });
 
-      if (method === "Momo") {
+      if (method === "VietQr") {
+        const vietqrResult = await apiFetch<ApiVietQrResult>(`/api/orders/${order.id}/vietqr-pay`, {
+          method: "POST",
+          token,
+        });
+        await refresh();
+        setVietqrModal({ order, result: vietqrResult });
+      } else if (method === "Momo") {
         const momoResult = await apiFetch<ApiMoMoPayResult>(`/api/orders/${order.id}/momo-pay`, {
           method: "POST",
           token,
@@ -150,6 +159,23 @@ export function CheckoutView() {
 
   return (
     <>
+    {vietqrModal && token && (
+      <VietQrModal
+        orderId={vietqrModal.order.id}
+        orderCode={vietqrModal.order.code}
+        total={vietqrModal.order.total}
+        vietqrResult={vietqrModal.result}
+        token={token}
+        onSuccess={() => {
+          setVietqrModal(null);
+          router.push(`/account/orders?just=${vietqrModal.order.id}`);
+        }}
+        onCancel={() => {
+          setVietqrModal(null);
+          router.push(`/account/orders?just=${vietqrModal.order.id}`);
+        }}
+      />
+    )}
     {momoModal && token && (
       <MoMoPayModal
         orderId={momoModal.order.id}
@@ -332,6 +358,8 @@ export function CheckoutView() {
               <><Loader2 className="size-4 animate-spin mr-2 inline" />Đang xử lý...</>
             ) : !canPay ? (
               "Số dư ví không đủ"
+            ) : method === "VietQr" ? (
+              "Xem thông tin chuyển khoản"
             ) : method === "Momo" ? (
               "Thanh toán bằng MoMo"
             ) : method === "ZaloPay" ? (

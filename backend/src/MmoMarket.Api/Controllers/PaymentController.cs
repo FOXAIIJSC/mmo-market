@@ -12,14 +12,14 @@ public class PaymentController : ControllerBase
     private readonly MoMoService _momo;
     private readonly ZaloPayService _zalo;
     private readonly VNPayService _vnpay;
+    private readonly VietQrService _vietqr;
     private readonly OrderService _order;
 
-    public PaymentController(MoMoService momo, ZaloPayService zalo, VNPayService vnpay, OrderService order)
-    { _momo = momo; _zalo = zalo; _vnpay = vnpay; _order = order; }
+    public PaymentController(MoMoService momo, ZaloPayService zalo, VNPayService vnpay, VietQrService vietqr, OrderService order)
+    { _momo = momo; _zalo = zalo; _vnpay = vnpay; _vietqr = vietqr; _order = order; }
 
     /// <summary>
     /// MoMo IPN — server-to-server callback (JSON body).
-    /// NOTE: IpnUrl must be publicly reachable (update appsettings.json / ngrok).
     /// </summary>
     [HttpPost("momo/ipn")]
     [AllowAnonymous]
@@ -36,7 +36,6 @@ public class PaymentController : ControllerBase
 
     /// <summary>
     /// ZaloPay IPN — server-to-server callback (form-urlencoded: data=&amp;mac=&amp;type=1).
-    /// NOTE: IpnUrl must be publicly reachable (update appsettings.json / ngrok).
     /// </summary>
     [HttpPost("zalopay/ipn")]
     [AllowAnonymous]
@@ -53,13 +52,11 @@ public class PaymentController : ControllerBase
                 await _order.ConfirmExternalPaymentAsync(orderId.Value, ct);
         }
 
-        // ZaloPay expects exactly this response shape
         return Ok(new { return_code = 1, return_message = "Success" });
     }
 
     /// <summary>
-    /// VNPay IPN — server-to-server callback (GET with query params).
-    /// NOTE: IpnUrl must be publicly reachable (update appsettings.json / ngrok).
+    /// VNPay IPN — server-to-server callback (GET query string).
     /// </summary>
     [HttpGet("vnpay/ipn")]
     [AllowAnonymous]
@@ -89,5 +86,27 @@ public class PaymentController : ControllerBase
         }
 
         return Ok(new { RspCode = "00", Message = "Confirm Success" });
+    }
+
+    /// <summary>
+    /// SePay webhook — bank transfer confirmation (VietQR).
+    /// SePay POSTs JSON; header: Authorization: Apikey {key}
+    /// NOTE: Webhook URL must be publicly reachable (update appsettings.json / ngrok).
+    /// </summary>
+    [HttpPost("sepay/webhook")]
+    [AllowAnonymous]
+    public async Task<IActionResult> SePayWebhook([FromBody] SePayWebhookDto dto, CancellationToken ct)
+    {
+        var auth = Request.Headers.Authorization.FirstOrDefault();
+        if (!_vietqr.VerifySePayWebhook(auth))
+            return Unauthorized(new { success = false, message = "Invalid API key" });
+
+        // Only process incoming transfers (transferType == "in")
+        if (!string.Equals(dto.TransferType, "in", StringComparison.OrdinalIgnoreCase))
+            return Ok(new { success = true });
+
+        await _order.ConfirmExternalPaymentByTransferNoteAsync(dto.Content ?? "", ct);
+
+        return Ok(new { success = true });
     }
 }

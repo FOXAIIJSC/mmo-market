@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using MmoMarket.Application.Common;
 using MmoMarket.Application.Config;
@@ -186,13 +187,33 @@ public class OrderService
         return order == null ? null : Map(order);
     }
 
-    // Idempotent: called by MoMo IPN or return-URL verification to mark an external payment as paid.
+    // Idempotent: called by MoMo / ZaloPay / VNPay IPN to mark an external payment as paid.
     public async Task<bool> ConfirmExternalPaymentAsync(Guid orderId, CancellationToken ct)
     {
         var order = await _db.Orders.Include(o => o.Lines)
             .FirstOrDefaultAsync(o => o.Id == orderId, ct);
         if (order == null) return false;
         if (order.Status != OrderStatus.PendingPayment) return true; // already confirmed
+
+        order.Status = OrderStatus.Paid;
+        order.PaidAt = DateTime.UtcNow;
+        await ProcessPaidOrderAsync(order, ct);
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    // Called by SePay webhook: extract MMK-XXXXXXX from transfer note, then confirm matching VietQR order.
+    public async Task<bool> ConfirmExternalPaymentByTransferNoteAsync(string content, CancellationToken ct)
+    {
+        var match = Regex.Match(content ?? "", @"MMK-\d{7}", RegexOptions.IgnoreCase);
+        if (!match.Success) return false;
+
+        var orderCode = match.Value.ToUpper();
+        var order = await _db.Orders.Include(o => o.Lines)
+            .FirstOrDefaultAsync(o => o.Code == orderCode
+                && o.Status == OrderStatus.PendingPayment
+                && o.PaymentMethod == PaymentMethod.VietQr, ct);
+        if (order == null) return false;
 
         order.Status = OrderStatus.Paid;
         order.PaidAt = DateTime.UtcNow;

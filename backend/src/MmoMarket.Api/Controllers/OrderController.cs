@@ -15,10 +15,11 @@ public class OrderController : ControllerBase
     private readonly MoMoService _momo;
     private readonly ZaloPayService _zalo;
     private readonly VNPayService _vnpay;
+    private readonly VietQrService _vietqr;
     private readonly ICurrentUser _user;
 
-    public OrderController(OrderService svc, MoMoService momo, ZaloPayService zalo, VNPayService vnpay, ICurrentUser user)
-    { _svc = svc; _momo = momo; _zalo = zalo; _vnpay = vnpay; _user = user; }
+    public OrderController(OrderService svc, MoMoService momo, ZaloPayService zalo, VNPayService vnpay, VietQrService vietqr, ICurrentUser user)
+    { _svc = svc; _momo = momo; _zalo = zalo; _vnpay = vnpay; _vietqr = vietqr; _user = user; }
 
     private Guid Uid => _user.UserId ?? throw new AppException("Unauthorized", 401);
 
@@ -46,6 +47,16 @@ public class OrderController : ControllerBase
         if (order.Status != "PendingPayment")
             throw new AppException("Đơn không ở trạng thái chờ thanh toán");
         return await _zalo.CreatePaymentAsync(id, order.Total, order.Code);
+    }
+
+    [HttpPost("{id:guid}/vietqr-pay")]
+    public async Task<VietQrResult> VietQrPay(Guid id, CancellationToken ct)
+    {
+        var order = await _svc.GetByIdAsync(Uid, id, ct)
+            ?? throw new AppException("Không tìm thấy đơn", 404);
+        if (order.Status != "PendingPayment")
+            throw new AppException("Đơn không ở trạng thái chờ thanh toán");
+        return _vietqr.GenerateQr(order.Total, order.Code);
     }
 
     [HttpPost("{id:guid}/vnpay-pay")]
