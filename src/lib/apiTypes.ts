@@ -472,6 +472,25 @@ export type ApiNotification = {
   createdAt: string;
 };
 
+export type ApiConversation = {
+  id: string;
+  otherPartyName: string;
+  otherPartyAvatarColor: string;
+  otherPartyUsername: string;
+  lastMessagePreview: string;
+  lastMessageAt: string;
+  unreadCount: number;
+};
+
+export type ApiChatMessage = {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderRole: "Buyer" | "Seller";
+  body: string;
+  createdAt: string;
+};
+
 export type ApiSellerCoupon = {
   id: string;
   code: string;

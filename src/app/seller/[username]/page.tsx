@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { MessageCircle, Star, ShieldCheck, Award, Calendar, Users } from "lucide-react";
 import { ProductCard } from "@/components/ProductCard";
 import { SiteShell } from "@/components/SiteShell";
@@ -73,7 +74,9 @@ export default async function SellerProfilePage({
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button leftIcon={<MessageCircle className="size-4" />}>Chat</Button>
+            <Link href={`/account/chat?seller=${seller.username}`}>
+              <Button leftIcon={<MessageCircle className="size-4" />}>Nhắn tin</Button>
+            </Link>
             <Button variant="outline">Theo dõi</Button>
           </div>
         </div>

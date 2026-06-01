@@ -27,6 +27,8 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<Coupon> Coupons => Set<Coupon>();
     public DbSet<CouponUsage> CouponUsages => Set<CouponUsage>();
+    public DbSet<Conversation> Conversations => Set<Conversation>();
+    public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
     public DbSet<SellerCoupon> SellerCoupons => Set<SellerCoupon>();
     public DbSet<Banner> Banners => Set<Banner>();
     public DbSet<FlashSale> FlashSales => Set<FlashSale>();
@@ -141,6 +143,20 @@ public class AppDbContext : DbContext, IAppDbContext
         {
             e.HasIndex(x => new { x.CouponId, x.UserId }).IsUnique();
             e.HasOne(x => x.Coupon).WithMany(c => c.Usages).HasForeignKey(x => x.CouponId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<Conversation>(e =>
+        {
+            e.HasIndex(x => new { x.BuyerId, x.SellerId }).IsUnique();
+            e.HasIndex(x => x.LastMessageAt);
+            e.HasOne(x => x.Buyer).WithMany().HasForeignKey(x => x.BuyerId);
+            e.HasOne(x => x.Seller).WithMany().HasForeignKey(x => x.SellerId);
+        });
+
+        b.Entity<ChatMessage>(e =>
+        {
+            e.HasIndex(x => x.ConversationId);
+            e.HasOne(x => x.Conversation).WithMany(c => c.Messages).HasForeignKey(x => x.ConversationId).OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<SellerCoupon>(e =>

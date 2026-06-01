@@ -9,6 +9,7 @@ using MmoMarket.Application.Reviews;
 using MmoMarket.Application.Sellers;
 using MmoMarket.Application.Wallet;
 using MmoMarket.Application.Config;
+using MmoMarket.Application.Messages;
 using MmoMarket.Application.Coupons;
 using MmoMarket.Application.Notifications;
 using MmoMarket.Application.Wishlist;
@@ -33,6 +34,7 @@ public static class DependencyInjection
         services.AddScoped<NotificationService>();
         services.AddScoped<CouponService>();
         services.AddScoped<ConfigService>();
+        services.AddScoped<MessageService>();
         return services;
     }
 }

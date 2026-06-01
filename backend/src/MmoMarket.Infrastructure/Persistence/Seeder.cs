@@ -18,6 +18,7 @@ public static class Seeder
         await SeedDemoBannersAsync(db, ct);
         await SeedDemoFlashSalesAsync(db, ct);
         await SeedDemoSellerCouponsAsync(db, ct);
+        await SeedDemoConversationsAsync(db, ct);
         await SeedDefaultConfigAsync(db, ct);
         await SeedDemoLoyaltyRewardsAsync(db, ct);
         if (await db.Categories.AnyAsync(ct)) return;
@@ -292,6 +293,32 @@ public static class Seeder
                 UpdatedAt TEXT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS Conversations (
+                Id TEXT NOT NULL CONSTRAINT PK_Conversations PRIMARY KEY,
+                BuyerId TEXT NOT NULL,
+                SellerId TEXT NOT NULL,
+                LastMessagePreview TEXT NOT NULL DEFAULT '',
+                LastMessageAt TEXT NOT NULL,
+                BuyerUnreadCount INTEGER NOT NULL DEFAULT 0,
+                SellerUnreadCount INTEGER NOT NULL DEFAULT 0,
+                CreatedAt TEXT NOT NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS IX_Conversations_BuyerId_SellerId ON Conversations(BuyerId, SellerId);
+            CREATE INDEX IF NOT EXISTS IX_Conversations_BuyerId ON Conversations(BuyerId);
+            CREATE INDEX IF NOT EXISTS IX_Conversations_SellerId ON Conversations(SellerId);
+            CREATE INDEX IF NOT EXISTS IX_Conversations_LastMessageAt ON Conversations(LastMessageAt);
+
+            CREATE TABLE IF NOT EXISTS ChatMessages (
+                Id TEXT NOT NULL CONSTRAINT PK_ChatMessages PRIMARY KEY,
+                ConversationId TEXT NOT NULL,
+                SenderId TEXT NOT NULL,
+                SenderName TEXT NOT NULL DEFAULT '',
+                SenderRole TEXT NOT NULL DEFAULT 'Buyer',
+                Body TEXT NOT NULL,
+                CreatedAt TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS IX_ChatMessages_ConversationId ON ChatMessages(ConversationId);
+
             CREATE TABLE IF NOT EXISTS SellerCoupons (
                 Id TEXT NOT NULL CONSTRAINT PK_SellerCoupons PRIMARY KEY,
                 SellerId TEXT NOT NULL,
@@ -387,6 +414,30 @@ public static class Seeder
             new Domain.Entities.LoyaltyReward { Title = "Miễn phí giao hàng", Description = "Miễn phí mọi loại phí trên 1 đơn",        PointsCost = 200,  Type = "Shipping", VoucherAmount = 0,      IsActive = true,  Position = 4 },
             new Domain.Entities.LoyaltyReward { Title = "Voucher 200.000₫",   Description = "Áp dụng cho đơn từ 1.000.000₫",           PointsCost = 2000, Type = "Voucher",  VoucherAmount = 200000, IsActive = true,  Position = 5 },
             new Domain.Entities.LoyaltyReward { Title = "Tài khoản Premium",  Description = "1 tháng ChatGPT Plus (giao tự động)",      PointsCost = 5000, Type = "Product",  VoucherAmount = 0,      IsActive = false, IsComingSoon = true, Position = 6 }
+        );
+        await db.SaveChangesAsync(ct);
+    }
+
+    private static async Task SeedDemoConversationsAsync(AppDbContext db, CancellationToken ct)
+    {
+        if (await db.Conversations.AnyAsync(ct)) return;
+        var buyer = await db.Users.FirstOrDefaultAsync(u => u.Username == "buyer", ct);
+        var kimchi = await db.Sellers.FirstOrDefaultAsync(s => s.Username == "kimchi", ct);
+        if (buyer == null || kimchi == null) return;
+        var now = DateTime.UtcNow;
+        var conv = new Domain.Entities.Conversation
+        {
+            BuyerId = buyer.Id, SellerId = kimchi.Id,
+            LastMessagePreview = "Bạn có thể giao tài khoản ngay không?",
+            LastMessageAt = now.AddMinutes(-5),
+            BuyerUnreadCount = 0, SellerUnreadCount = 1,
+        };
+        db.Conversations.Add(conv);
+        await db.SaveChangesAsync(ct);
+        db.ChatMessages.AddRange(
+            new Domain.Entities.ChatMessage { ConversationId = conv.Id, SenderId = buyer.Id, SenderName = buyer.DisplayName, SenderRole = "Buyer", Body = "Chào shop, tôi muốn hỏi về sản phẩm ChatGPT Plus.", CreatedAt = now.AddMinutes(-30) },
+            new Domain.Entities.ChatMessage { ConversationId = conv.Id, SenderId = kimchi.UserId, SenderName = "KimChi Shop", SenderRole = "Seller", Body = "Chào bạn! Mình có sản phẩm ChatGPT Plus chính hãng, giao tự động 24/7 nhé.", CreatedAt = now.AddMinutes(-25) },
+            new Domain.Entities.ChatMessage { ConversationId = conv.Id, SenderId = buyer.Id, SenderName = buyer.DisplayName, SenderRole = "Buyer", Body = "Bạn có thể giao tài khoản ngay không?", CreatedAt = now.AddMinutes(-5) }
         );
         await db.SaveChangesAsync(ct);
     }

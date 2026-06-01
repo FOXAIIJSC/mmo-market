@@ -23,6 +23,8 @@ public interface IAppDbContext
     DbSet<Notification> Notifications { get; }
     DbSet<Coupon> Coupons { get; }
     DbSet<CouponUsage> CouponUsages { get; }
+    DbSet<Conversation> Conversations { get; }
+    DbSet<ChatMessage> ChatMessages { get; }
     DbSet<SellerCoupon> SellerCoupons { get; }
     DbSet<Banner> Banners { get; }
     DbSet<FlashSale> FlashSales { get; }

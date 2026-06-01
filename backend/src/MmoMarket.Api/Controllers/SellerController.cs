@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MmoMarket.Application.Common;
+using MmoMarket.Application.Messages;
 using MmoMarket.Application.Sellers;
 
 namespace MmoMarket.Api.Controllers;
@@ -11,8 +12,9 @@ namespace MmoMarket.Api.Controllers;
 public class SellerController : ControllerBase
 {
     private readonly SellerService _svc;
+    private readonly MessageService _msg;
     private readonly ICurrentUser _user;
-    public SellerController(SellerService svc, ICurrentUser user) { _svc = svc; _user = user; }
+    public SellerController(SellerService svc, MessageService msg, ICurrentUser user) { _svc = svc; _msg = msg; _user = user; }
 
     private Guid Uid => _user.UserId ?? throw new AppException("Unauthorized", 401);
 
@@ -73,6 +75,19 @@ public class SellerController : ControllerBase
     [HttpPost("coupons/{id:guid}/toggle")]
     public Task<SellerCouponDto> ToggleCoupon(Guid id, CancellationToken ct) =>
         _svc.ToggleSellerCouponAsync(Uid, id, ct);
+
+    // ── Messages ──────────────────────────────────────────────────────────────
+    [HttpGet("messages")]
+    public Task<ConversationDto[]> ListMessages(CancellationToken ct) =>
+        _msg.ListSellerConversationsAsync(Uid, ct);
+
+    [HttpGet("messages/{id:guid}")]
+    public Task<ChatMessageDto[]> GetSellerMessages(Guid id, CancellationToken ct) =>
+        _msg.GetMessagesAsync(id, Uid, "Seller", ct);
+
+    [HttpPost("messages/{id:guid}")]
+    public Task<ChatMessageDto> SendSellerMessage(Guid id, [FromBody] SendMessageDto dto, CancellationToken ct) =>
+        _msg.SendMessageAsync(id, Uid, "Seller", dto.Body, ct);
 
     [HttpGet("reviews")]
     public Task<SellerReviewDto[]> Reviews(CancellationToken ct) => _svc.ListMyReviewsAsync(Uid, ct);
