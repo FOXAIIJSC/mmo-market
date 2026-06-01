@@ -11,6 +11,7 @@ type AuthCtx = {
   token: string | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<ApiUser>;
+  loginWithGoogle: (idToken: string) => Promise<ApiUser>;
   register: (email: string, password: string, username: string, displayName: string, referralCode?: string) => Promise<ApiUser>;
   logout: () => void;
   refresh: () => Promise<void>;
@@ -54,6 +55,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return res.user;
   }, []);
 
+  const loginWithGoogle = useCallback(async (idToken: string): Promise<ApiUser> => {
+    const res = await apiFetch<ApiAuthResponse>("/api/auth/google", {
+      method: "POST",
+      body: JSON.stringify({ idToken }),
+    });
+    persist(res.accessToken, res.user);
+    return res.user;
+  }, []);
+
   const register = useCallback(async (email: string, password: string, username: string, displayName: string, referralCode?: string): Promise<ApiUser> => {
     const res = await apiFetch<ApiAuthResponse>("/api/auth/register", {
       method: "POST",
@@ -77,7 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(() => persist(null, null), []);
 
   return (
-    <Ctx.Provider value={{ user, token, loading, login, register, logout, refresh }}>
+    <Ctx.Provider value={{ user, token, loading, login, loginWithGoogle, register, logout, refresh }}>
       {children}
     </Ctx.Provider>
   );

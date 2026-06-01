@@ -3,17 +3,34 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Mail, Lock, AlertCircle } from "lucide-react";
+import { GoogleLogin, type CredentialResponse } from "@react-oauth/google";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useAuth } from "@/lib/AuthContext";
 
 export function LoginForm() {
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("buyer@mmo.local");
   const [password, setPassword] = useState("Buyer@123");
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const handleGoogleSuccess = async (cr: CredentialResponse) => {
+    if (!cr.credential) return;
+    setErr(null);
+    setLoading(true);
+    try {
+      const user = await loginWithGoogle(cr.credential);
+      if (user.role === "Admin" || user.role === "SuperAdmin") router.push("/admin");
+      else if (user.role === "Seller") router.push("/seller/dashboard");
+      else router.push("/account");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Đăng nhập Google thất bại");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,6 +100,22 @@ export function LoginForm() {
       <Button size="lg" className="w-full" type="submit" disabled={loading}>
         {loading ? "Đang đăng nhập..." : "Đăng nhập"}
       </Button>
+      <div className="relative flex items-center">
+        <div className="flex-grow border-t border-border" />
+        <span className="mx-3 shrink-0 text-xs text-text-muted">hoặc</span>
+        <div className="flex-grow border-t border-border" />
+      </div>
+      <div className="flex justify-center">
+        <GoogleLogin
+          onSuccess={handleGoogleSuccess}
+          onError={() => setErr("Đăng nhập Google thất bại")}
+          theme="filled_black"
+          size="large"
+          text="continue_with"
+          shape="rectangular"
+          width={360}
+        />
+      </div>
       <p className="pt-2 text-center text-sm text-text-muted">
         Chưa có tài khoản?{" "}
         <Link href="/register" className="font-semibold text-accent hover:underline">

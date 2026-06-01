@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { AuthProvider } from "@/lib/AuthContext";
-import { WishlistProvider } from "@/lib/WishlistContext";
-import { NotificationProvider } from "@/lib/NotificationContext";
+import { Providers } from "@/lib/Providers";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,7 +31,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-bg text-text" suppressHydrationWarning>
-        <AuthProvider><WishlistProvider><NotificationProvider>{children}</NotificationProvider></WishlistProvider></AuthProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

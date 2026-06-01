@@ -42,4 +42,8 @@ public class AuthController : ControllerBase
         if (_user.UserId is not { } id) throw new AppException("Unauthorized", 401);
         await _svc.ChangePasswordAsync(id, dto, ct);
     }
+
+    [HttpPost("google")]
+    public async Task<AuthResponse> GoogleLogin([FromBody] GoogleLoginDto dto, CancellationToken ct)
+        => await _svc.GoogleLoginAsync(dto.IdToken, ct);
 }

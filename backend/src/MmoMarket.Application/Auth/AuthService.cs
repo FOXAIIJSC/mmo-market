@@ -1,4 +1,8 @@
+using System.Net.Http.Json;
+using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using MmoMarket.Application.Common;
 using MmoMarket.Application.Config;
 using MmoMarket.Domain.Entities;
@@ -12,13 +16,18 @@ public class AuthService
     private readonly IPasswordHasher _hasher;
     private readonly IJwtTokenService _jwt;
     private readonly ConfigService _config;
+    private readonly IHttpClientFactory _httpFactory;
+    private readonly string _googleClientId;
 
-    public AuthService(IAppDbContext db, IPasswordHasher hasher, IJwtTokenService jwt, ConfigService config)
+    public AuthService(IAppDbContext db, IPasswordHasher hasher, IJwtTokenService jwt,
+        ConfigService config, IHttpClientFactory httpFactory, IConfiguration configuration)
     {
         _db = db;
         _hasher = hasher;
         _jwt = jwt;
         _config = config;
+        _httpFactory = httpFactory;
+        _googleClientId = configuration["Google:ClientId"] ?? "";
     }
 
     public async Task<AuthResponse> RegisterAsync(RegisterDto dto, CancellationToken ct)
@@ -71,8 +80,79 @@ public class AuthService
         var email = dto.Email.Trim().ToLowerInvariant();
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email, ct)
             ?? throw new AppException("Sai email hoặc mật khẩu", 401);
-        if (!_hasher.Verify(dto.Password, user.PasswordHash))
+        if (string.IsNullOrEmpty(user.PasswordHash) || !_hasher.Verify(dto.Password, user.PasswordHash))
             throw new AppException("Sai email hoặc mật khẩu", 401);
+        return new AuthResponse(_jwt.GenerateAccessToken(user), Map(user));
+    }
+
+    public async Task<AuthResponse> GoogleLoginAsync(string idToken, CancellationToken ct)
+    {
+        var http = _httpFactory.CreateClient();
+        GoogleTokenInfo info;
+        try
+        {
+            var response = await http.GetAsync(
+                $"https://oauth2.googleapis.com/tokeninfo?id_token={Uri.EscapeDataString(idToken)}", ct);
+            if (!response.IsSuccessStatusCode)
+                throw new AppException("Token Google không hợp lệ", 401);
+            info = await response.Content.ReadFromJsonAsync<GoogleTokenInfo>(ct)
+                   ?? throw new AppException("Token Google không hợp lệ", 401);
+        }
+        catch (AppException) { throw; }
+        catch (HttpRequestException)
+        {
+            throw new AppException("Không thể kết nối đến Google để xác minh", 502);
+        }
+
+        if (!string.IsNullOrEmpty(_googleClientId) && info.Aud != _googleClientId)
+            throw new AppException("Token Google không hợp lệ", 401);
+
+        if (info.EmailVerified != "true")
+            throw new AppException("Email Google chưa được xác minh");
+
+        var email = info.Email.Trim().ToLowerInvariant();
+        var user = await _db.Users.FirstOrDefaultAsync(
+            u => u.GoogleId == info.Sub || u.Email == email, ct);
+
+        if (user == null)
+        {
+            var baseName = Regex.Replace(email.Split('@')[0], @"[^a-zA-Z0-9_]", "");
+            if (baseName.Length < 3) baseName = "user" + baseName;
+            var username = baseName;
+            if (await _db.Users.AnyAsync(u => u.Username == username, ct))
+                username = baseName + "_" + Guid.NewGuid().ToString("N")[..6];
+
+            var signupBonus  = await _config.GetIntAsync(ConfigKeys.LoyaltySignupBonus, 100, ct);
+            var welcomeBonus = await _config.GetDecimalAsync(ConfigKeys.WelcomeBonus, 100_000m, ct);
+
+            user = new User
+            {
+                Email        = email,
+                GoogleId     = info.Sub,
+                PasswordHash = Guid.NewGuid().ToString("N"), // unusable — Google-only account
+                Username     = username,
+                DisplayName  = string.IsNullOrWhiteSpace(info.Name) ? username : info.Name,
+                Role         = UserRole.Buyer,
+                ReferralCode = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant(),
+                WalletBalance = welcomeBonus,
+                LoyaltyPoints = signupBonus,
+            };
+            _db.Users.Add(user);
+            _db.WalletTxns.Add(new WalletTxn
+            {
+                UserId = user.Id,
+                Type   = WalletTxnType.Bonus,
+                Amount = 100_000m,
+                Status = WalletTxnStatus.Completed,
+                Note   = "Quà chào mừng",
+            });
+        }
+        else if (user.GoogleId == null)
+        {
+            user.GoogleId = info.Sub; // link existing email account to Google
+        }
+
+        await _db.SaveChangesAsync(ct);
         return new AuthResponse(_jwt.GenerateAccessToken(user), Map(user));
     }
 
@@ -111,4 +191,13 @@ public class AuthService
     public static UserDto Map(User u) => new(
         u.Id, u.Email, u.Username, u.DisplayName, u.Role.ToString(),
         u.WalletBalance, u.LoyaltyPoints, u.KycStatus.ToString(), u.AvatarColor, u.PhoneNumber);
+
+    private sealed class GoogleTokenInfo
+    {
+        [JsonPropertyName("sub")]            public string Sub            { get; set; } = "";
+        [JsonPropertyName("email")]          public string Email          { get; set; } = "";
+        [JsonPropertyName("name")]           public string Name           { get; set; } = "";
+        [JsonPropertyName("aud")]            public string Aud            { get; set; } = "";
+        [JsonPropertyName("email_verified")] public string EmailVerified  { get; set; } = "";
+    }
 }

@@ -16,6 +16,7 @@ public class User : Entity
     public KycStatus KycStatus { get; set; } = KycStatus.None;
     public decimal WalletBalance { get; set; }
     public int LoyaltyPoints { get; set; }
+    public string? GoogleId { get; set; }
     public string? ReferralCode { get; set; }
     public Guid? ReferredByUserId { get; set; }
 

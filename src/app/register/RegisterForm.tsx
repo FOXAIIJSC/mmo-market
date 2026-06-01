@@ -3,12 +3,13 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Mail, Lock, User, AtSign, AlertCircle } from "lucide-react";
+import { GoogleLogin, type CredentialResponse } from "@react-oauth/google";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useAuth } from "@/lib/AuthContext";
 
 export function RegisterForm() {
-  const { register } = useAuth();
+  const { register, loginWithGoogle } = useAuth();
   const router = useRouter();
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
@@ -18,6 +19,20 @@ export function RegisterForm() {
   const [referralCode, setReferralCode] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const handleGoogleSuccess = async (cr: CredentialResponse) => {
+    if (!cr.credential) return;
+    setErr(null);
+    setLoading(true);
+    try {
+      await loginWithGoogle(cr.credential);
+      router.push("/account");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Đăng ký qua Google thất bại");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,6 +134,22 @@ export function RegisterForm() {
       <Button size="lg" className="w-full" type="submit" disabled={loading}>
         {loading ? "Đang tạo..." : "Tạo tài khoản"}
       </Button>
+      <div className="relative flex items-center">
+        <div className="flex-grow border-t border-border" />
+        <span className="mx-3 shrink-0 text-xs text-text-muted">hoặc đăng ký nhanh</span>
+        <div className="flex-grow border-t border-border" />
+      </div>
+      <div className="flex justify-center">
+        <GoogleLogin
+          onSuccess={handleGoogleSuccess}
+          onError={() => setErr("Đăng ký qua Google thất bại")}
+          theme="filled_black"
+          size="large"
+          text="signup_with"
+          shape="rectangular"
+          width={360}
+        />
+      </div>
       <p className="pt-2 text-center text-sm text-text-muted">
         Đã có tài khoản?{" "}
         <Link href="/login" className="font-semibold text-accent hover:underline">Đăng nhập</Link>
