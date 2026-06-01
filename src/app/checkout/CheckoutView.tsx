@@ -6,9 +6,10 @@ import { Wallet, QrCode, CreditCard, Bitcoin, ShieldCheck, Loader2, AlertCircle,
 import { Button } from "@/components/ui/Button";
 import { MoMoPayModal } from "@/components/MoMoPayModal";
 import { ZaloPayModal } from "@/components/ZaloPayModal";
+import { VNPayModal } from "@/components/VNPayModal";
 import { useAuth } from "@/lib/AuthContext";
 import { apiFetch } from "@/lib/api";
-import type { ApiCart, ApiMoMoPayResult, ApiOrder, ApiValidateResult, ApiZaloPayResult } from "@/lib/apiTypes";
+import type { ApiCart, ApiMoMoPayResult, ApiOrder, ApiValidateResult, ApiVNPayResult, ApiZaloPayResult } from "@/lib/apiTypes";
 import { formatVND } from "@/lib/format";
 
 type PaymentMethodOption = {
@@ -25,7 +26,7 @@ const methods: PaymentMethodOption[] = [
   { v: "VietQr", label: "VietQR / Chuyển khoản", desc: "Mock — sẽ ghi nhận khi tích hợp SePay", icon: QrCode, fee: 0 },
   { v: "Momo", label: "Ví MoMo", desc: "Quét mã QR hoặc đăng nhập MoMo để thanh toán", icon: Wallet, fee: 0 },
   { v: "ZaloPay", label: "ZaloPay", desc: "Quét mã QR hoặc đăng nhập ZaloPay để thanh toán", icon: Wallet, fee: 0 },
-  { v: "VnPay", label: "VNPay", desc: "Mock — chưa tích hợp gateway", icon: CreditCard, fee: 5_000 },
+  { v: "VnPay", label: "VNPay", desc: "Thanh toán qua cổng VNPay — ATM nội địa, Visa/Master, QR Code", icon: CreditCard, fee: 5_000 },
   { v: "Usdt", label: "USDT (TRC20)", desc: "Mock — chưa tích hợp gateway", icon: Bitcoin, fee: 0 },
 ];
 
@@ -44,6 +45,7 @@ export function CheckoutView() {
   const [couponErr, setCouponErr] = useState<string | null>(null);
   const [momoModal, setMomoModal] = useState<{ order: ApiOrder; result: ApiMoMoPayResult } | null>(null);
   const [zaloModal, setZaloModal] = useState<{ order: ApiOrder; result: ApiZaloPayResult } | null>(null);
+  const [vnpayModal, setVnpayModal] = useState<{ order: ApiOrder; result: ApiVNPayResult } | null>(null);
 
   useEffect(() => {
     if (!authLoading && !token) {
@@ -107,6 +109,13 @@ export function CheckoutView() {
         });
         await refresh();
         setZaloModal({ order, result: zaloResult });
+      } else if (method === "VnPay") {
+        const vnpayResult = await apiFetch<ApiVNPayResult>(`/api/orders/${order.id}/vnpay-pay`, {
+          method: "POST",
+          token,
+        });
+        await refresh();
+        setVnpayModal({ order, result: vnpayResult });
       } else {
         await refresh();
         router.push(`/account/orders?just=${order.id}`);
@@ -172,6 +181,23 @@ export function CheckoutView() {
         onCancel={() => {
           setZaloModal(null);
           router.push(`/account/orders?just=${zaloModal.order.id}`);
+        }}
+      />
+    )}
+    {vnpayModal && token && (
+      <VNPayModal
+        orderId={vnpayModal.order.id}
+        orderCode={vnpayModal.order.code}
+        total={vnpayModal.order.total}
+        vnpayResult={vnpayModal.result}
+        token={token}
+        onSuccess={() => {
+          setVnpayModal(null);
+          router.push(`/account/orders?just=${vnpayModal.order.id}`);
+        }}
+        onCancel={() => {
+          setVnpayModal(null);
+          router.push(`/account/orders?just=${vnpayModal.order.id}`);
         }}
       />
     )}
@@ -310,6 +336,8 @@ export function CheckoutView() {
               "Thanh toán bằng MoMo"
             ) : method === "ZaloPay" ? (
               "Thanh toán bằng ZaloPay"
+            ) : method === "VnPay" ? (
+              "Thanh toán bằng VNPay"
             ) : (
               "Đặt hàng"
             )}

@@ -11,14 +11,15 @@ public class PaymentController : ControllerBase
 {
     private readonly MoMoService _momo;
     private readonly ZaloPayService _zalo;
+    private readonly VNPayService _vnpay;
     private readonly OrderService _order;
 
-    public PaymentController(MoMoService momo, ZaloPayService zalo, OrderService order)
-    { _momo = momo; _zalo = zalo; _order = order; }
+    public PaymentController(MoMoService momo, ZaloPayService zalo, VNPayService vnpay, OrderService order)
+    { _momo = momo; _zalo = zalo; _vnpay = vnpay; _order = order; }
 
     /// <summary>
-    /// MoMo IPN — server-to-server callback.
-    /// NOTE: IpnUrl must be publicly reachable in production (update appsettings.json).
+    /// MoMo IPN — server-to-server callback (JSON body).
+    /// NOTE: IpnUrl must be publicly reachable (update appsettings.json / ngrok).
     /// </summary>
     [HttpPost("momo/ipn")]
     [AllowAnonymous]
@@ -34,9 +35,8 @@ public class PaymentController : ControllerBase
     }
 
     /// <summary>
-    /// ZaloPay IPN — server-to-server callback (form-urlencoded).
-    /// ZaloPay POSTs: data=&lt;json_string&gt;&amp;mac=&lt;hmac&gt;&amp;type=1
-    /// NOTE: IpnUrl must be publicly reachable in production (update appsettings.json).
+    /// ZaloPay IPN — server-to-server callback (form-urlencoded: data=&amp;mac=&amp;type=1).
+    /// NOTE: IpnUrl must be publicly reachable (update appsettings.json / ngrok).
     /// </summary>
     [HttpPost("zalopay/ipn")]
     [AllowAnonymous]
@@ -53,7 +53,41 @@ public class PaymentController : ControllerBase
                 await _order.ConfirmExternalPaymentAsync(orderId.Value, ct);
         }
 
-        // ZaloPay expects: {"return_code":1,"return_message":"Success"}
+        // ZaloPay expects exactly this response shape
         return Ok(new { return_code = 1, return_message = "Success" });
+    }
+
+    /// <summary>
+    /// VNPay IPN — server-to-server callback (GET with query params).
+    /// NOTE: IpnUrl must be publicly reachable (update appsettings.json / ngrok).
+    /// </summary>
+    [HttpGet("vnpay/ipn")]
+    [AllowAnonymous]
+    public async Task<IActionResult> VNPayIpn(CancellationToken ct)
+    {
+        var queryParams = Request.Query.ToDictionary(kv => kv.Key, kv => kv.Value.ToString());
+
+        if (!_vnpay.VerifyIpnSignature(queryParams))
+            return Ok(new { RspCode = "97", Message = "Invalid Checksum" });
+
+        var responseCode = queryParams.GetValueOrDefault("vnp_ResponseCode", "");
+        var txnStatus    = queryParams.GetValueOrDefault("vnp_TransactionStatus", "");
+
+        if (responseCode == "00" && txnStatus == "00")
+        {
+            var orderId = VNPayService.ParseOrderIdFromIpn(queryParams);
+            if (orderId.HasValue)
+            {
+                var confirmed = await _order.ConfirmExternalPaymentAsync(orderId.Value, ct);
+                if (!confirmed)
+                    return Ok(new { RspCode = "02", Message = "Order already confirmed" });
+            }
+            else
+            {
+                return Ok(new { RspCode = "01", Message = "Order Not Found" });
+            }
+        }
+
+        return Ok(new { RspCode = "00", Message = "Confirm Success" });
     }
 }

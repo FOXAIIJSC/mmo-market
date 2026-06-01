@@ -133,6 +133,10 @@ export type ApiZaloPayResult = {
   zpTransToken: string;
 };
 
+export type ApiVNPayResult = {
+  paymentUrl: string;
+};
+
 export type ApiWalletTxn = {
   id: string;
   type: string;
