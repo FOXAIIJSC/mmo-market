@@ -46,4 +46,28 @@ public class AuthController : ControllerBase
     [HttpPost("google")]
     public async Task<AuthResponse> GoogleLogin([FromBody] GoogleLoginDto dto, CancellationToken ct)
         => await _svc.GoogleLoginAsync(dto.IdToken, ct);
+
+    [HttpGet("2fa/setup")]
+    [Authorize]
+    public async Task<TwoFaSetupResult> TwoFaSetup(CancellationToken ct)
+    {
+        if (_user.UserId is not { } id) throw new AppException("Unauthorized", 401);
+        return await _svc.Setup2FaAsync(id, ct);
+    }
+
+    [HttpPost("2fa/enable")]
+    [Authorize]
+    public async Task<UserDto> TwoFaEnable([FromBody] TwoFaEnableDto dto, CancellationToken ct)
+    {
+        if (_user.UserId is not { } id) throw new AppException("Unauthorized", 401);
+        return await _svc.Enable2FaAsync(id, dto.Code, ct);
+    }
+
+    [HttpPost("2fa/disable")]
+    [Authorize]
+    public async Task<UserDto> TwoFaDisable([FromBody] TwoFaDisableDto dto, CancellationToken ct)
+    {
+        if (_user.UserId is not { } id) throw new AppException("Unauthorized", 401);
+        return await _svc.Disable2FaAsync(id, dto.Code, ct);
+    }
 }

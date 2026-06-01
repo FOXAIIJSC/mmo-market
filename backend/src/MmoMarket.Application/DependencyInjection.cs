@@ -36,6 +36,7 @@ public static class DependencyInjection
         services.AddScoped<CouponService>();
         services.AddScoped<ConfigService>();
         services.AddScoped<MessageService>();
+        services.AddScoped<TotpService>();
         services.AddScoped<MoMoService>();
         services.AddScoped<ZaloPayService>();
         services.AddScoped<VNPayService>();

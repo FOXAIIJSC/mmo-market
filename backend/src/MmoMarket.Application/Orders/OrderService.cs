@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using MmoMarket.Application.Auth;
 using MmoMarket.Application.Common;
 using MmoMarket.Application.Config;
 using MmoMarket.Application.Coupons;
@@ -9,7 +10,7 @@ using MmoMarket.Domain.Enums;
 
 namespace MmoMarket.Application.Orders;
 
-public record CheckoutDto(string PaymentMethod, string? Note, string? CouponCode);
+public record CheckoutDto(string PaymentMethod, string? Note, string? CouponCode, string? TotpCode);
 public record OrderLineDto(Guid Id, Guid ProductId, string Title, decimal UnitPrice, int Quantity, string Delivery, string[]? DeliveredItems);
 public record OrderDto(
     Guid Id,
@@ -32,7 +33,9 @@ public class OrderService
     private readonly IAppDbContext _db;
     private readonly CouponService _coupon;
     private readonly ConfigService _config;
-    public OrderService(IAppDbContext db, CouponService coupon, ConfigService config) { _db = db; _coupon = coupon; _config = config; }
+    private readonly TotpService _totp;
+    public OrderService(IAppDbContext db, CouponService coupon, ConfigService config, TotpService totp)
+    { _db = db; _coupon = coupon; _config = config; _totp = totp; }
 
     public async Task<OrderDto> CheckoutAsync(Guid userId, CheckoutDto dto, CancellationToken ct)
     {
@@ -62,6 +65,13 @@ public class OrderService
         if (method == PaymentMethod.Wallet)
         {
             if (user.WalletBalance < total) throw new AppException("Số dư ví không đủ");
+            if (user.TwoFactorEnabled)
+            {
+                if (string.IsNullOrWhiteSpace(dto.TotpCode))
+                    throw new AppException("Tài khoản đã bật bảo mật 2 lớp. Vui lòng nhập mã xác thực.", 403);
+                if (!_totp.Verify(user.TotpSecret!, dto.TotpCode))
+                    throw new AppException("Mã xác thực 2FA không đúng hoặc đã hết hạn.", 400);
+            }
         }
 
         var order = new Order

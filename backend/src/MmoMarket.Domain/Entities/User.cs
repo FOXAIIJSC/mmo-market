@@ -17,6 +17,7 @@ public class User : Entity
     public decimal WalletBalance { get; set; }
     public int LoyaltyPoints { get; set; }
     public string? GoogleId { get; set; }
+    public string? TotpSecret { get; set; }
     public string? ReferralCode { get; set; }
     public Guid? ReferredByUserId { get; set; }
 

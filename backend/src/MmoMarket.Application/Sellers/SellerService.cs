@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using MmoMarket.Application.Auth;
 using MmoMarket.Application.Catalog;
 using MmoMarket.Application.Common;
 using MmoMarket.Application.Config;
@@ -41,7 +42,7 @@ public record InventoryItemDto(Guid Id, string Preview, bool Reserved, bool Sold
 
 public record InventoryUploadDto(string[] Items);
 
-public record WithdrawCreateDto(decimal Amount, string Method, string Account, string? Note);
+public record WithdrawCreateDto(decimal Amount, string Method, string Account, string? Note, string? TotpCode);
 public record WithdrawDto(Guid Id, decimal Amount, string Method, string Account, string Status, string? Note, string? AdminNote, DateTime CreatedAt, DateTime? ProcessedAt);
 
 public record SellerDashboardDto(
@@ -53,7 +54,9 @@ public class SellerService
 {
     private readonly IAppDbContext _db;
     private readonly ConfigService _config;
-    public SellerService(IAppDbContext db, ConfigService config) { _db = db; _config = config; }
+    private readonly TotpService _totp;
+    public SellerService(IAppDbContext db, ConfigService config, TotpService totp)
+    { _db = db; _config = config; _totp = totp; }
 
     private async Task<Seller> GetSellerForUserAsync(Guid userId, CancellationToken ct)
     {
@@ -288,6 +291,15 @@ public class SellerService
         var dashboard = await GetDashboardAsync(userId, ct);
         if (dto.Amount <= 0) throw new AppException("Số tiền không hợp lệ");
         if (dto.Amount > dashboard.AvailableBalance) throw new AppException($"Vượt quá số dư khả dụng ({dashboard.AvailableBalance:N0})");
+
+        var user = await _db.Users.FindAsync(new object[] { userId }, ct);
+        if (user?.TwoFactorEnabled == true)
+        {
+            if (string.IsNullOrWhiteSpace(dto.TotpCode))
+                throw new AppException("Tài khoản đã bật bảo mật 2 lớp. Vui lòng nhập mã xác thực.", 403);
+            if (!_totp.Verify(user.TotpSecret!, dto.TotpCode))
+                throw new AppException("Mã xác thực 2FA không đúng hoặc đã hết hạn.", 400);
+        }
         var w = new WithdrawRequest
         {
             SellerUserId = userId,

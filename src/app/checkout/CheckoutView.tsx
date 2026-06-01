@@ -9,6 +9,7 @@ import { ZaloPayModal } from "@/components/ZaloPayModal";
 import { VNPayModal } from "@/components/VNPayModal";
 import { VietQrModal } from "@/components/VietQrModal";
 import { UsdtPayModal } from "@/components/UsdtPayModal";
+import { TotpVerifyModal } from "@/components/TotpVerifyModal";
 import { useAuth } from "@/lib/AuthContext";
 import { apiFetch } from "@/lib/api";
 import type { ApiCart, ApiMoMoPayResult, ApiOrder, ApiUsdtPayResult, ApiValidateResult, ApiVietQrResult, ApiVNPayResult, ApiZaloPayResult } from "@/lib/apiTypes";
@@ -50,6 +51,9 @@ export function CheckoutView() {
   const [vnpayModal, setVnpayModal] = useState<{ order: ApiOrder; result: ApiVNPayResult } | null>(null);
   const [vietqrModal, setVietqrModal] = useState<{ order: ApiOrder; result: ApiVietQrResult } | null>(null);
   const [usdtModal, setUsdtModal] = useState<{ order: ApiOrder; result: ApiUsdtPayResult } | null>(null);
+  const [totpModal, setTotpModal] = useState(false);
+  const [totpErr, setTotpErr] = useState<string | null>(null);
+  const [totpLoading, setTotpLoading] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !token) {
@@ -88,15 +92,27 @@ export function CheckoutView() {
 
   const removeCoupon = () => { setCouponApplied(null); setCouponErr(null); };
 
-  const placeOrder = async () => {
+  const placeOrder = async (totpCode?: string) => {
     if (!token) return;
+    // If wallet and 2FA enabled, ask for code first
+    if (method === "Wallet" && user?.twoFactorEnabled && !totpCode) {
+      setTotpModal(true);
+      setTotpErr(null);
+      return;
+    }
     setSubmitting(true);
+    setTotpLoading(false);
     setErr(null);
     try {
       const order = await apiFetch<ApiOrder>("/api/orders/checkout", {
         method: "POST",
         token,
-        body: JSON.stringify({ paymentMethod: method, note, couponCode: couponApplied?.code ?? null }),
+        body: JSON.stringify({
+          paymentMethod: method,
+          note,
+          couponCode: couponApplied?.code ?? null,
+          totpCode: totpCode ?? null,
+        }),
       });
 
       if (method === "Usdt") {
@@ -168,6 +184,27 @@ export function CheckoutView() {
 
   return (
     <>
+    {totpModal && (
+      <TotpVerifyModal
+        title="Xác thực 2FA — Thanh toán ví"
+        description="Nhập mã 6 chữ số từ Google Authenticator để xác nhận thanh toán bằng ví."
+        error={totpErr}
+        loading={totpLoading}
+        onConfirm={async (code) => {
+          setTotpErr(null);
+          setTotpLoading(true);
+          try {
+            await placeOrder(code);
+            setTotpModal(false);
+          } catch {
+            setTotpErr("Mã không đúng, vui lòng thử lại.");
+          } finally {
+            setTotpLoading(false);
+          }
+        }}
+        onCancel={() => { setTotpModal(false); setTotpErr(null); }}
+      />
+    )}
     {usdtModal && token && (
       <UsdtPayModal
         orderId={usdtModal.order.id}
@@ -379,7 +416,7 @@ export function CheckoutView() {
             <span className="text-sm font-semibold text-text">Tổng</span>
             <span className="num text-2xl font-extrabold text-accent">{formatVND(total)}</span>
           </div>
-          <Button onClick={placeOrder} size="lg" className="w-full" disabled={submitting || !canPay}>
+          <Button onClick={() => placeOrder()} size="lg" className="w-full" disabled={submitting || !canPay}>
             {submitting ? (
               <><Loader2 className="size-4 animate-spin mr-2 inline" />Đang xử lý...</>
             ) : !canPay ? (

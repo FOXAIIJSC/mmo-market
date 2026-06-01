@@ -17,16 +17,19 @@ public class AuthService
     private readonly IJwtTokenService _jwt;
     private readonly ConfigService _config;
     private readonly IHttpClientFactory _httpFactory;
+    private readonly TotpService _totp;
     private readonly string _googleClientId;
 
     public AuthService(IAppDbContext db, IPasswordHasher hasher, IJwtTokenService jwt,
-        ConfigService config, IHttpClientFactory httpFactory, IConfiguration configuration)
+        ConfigService config, IHttpClientFactory httpFactory, IConfiguration configuration,
+        TotpService totp)
     {
         _db = db;
         _hasher = hasher;
         _jwt = jwt;
         _config = config;
         _httpFactory = httpFactory;
+        _totp = totp;
         _googleClientId = configuration["Google:ClientId"] ?? "";
     }
 
@@ -188,9 +191,51 @@ public class AuthService
         await _db.SaveChangesAsync(ct);
     }
 
+    public async Task<TwoFaSetupResult> Setup2FaAsync(Guid userId, CancellationToken ct)
+    {
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct)
+            ?? throw new AppException("User không tồn tại", 404);
+        if (user.TwoFactorEnabled)
+            throw new AppException("Bảo mật 2 lớp đã được bật. Hãy tắt trước khi thiết lập lại.");
+        var result = _totp.GenerateSetup(user.Email);
+        user.TotpSecret = result.Secret;
+        await _db.SaveChangesAsync(ct);
+        return result;
+    }
+
+    public async Task<UserDto> Enable2FaAsync(Guid userId, string code, CancellationToken ct)
+    {
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct)
+            ?? throw new AppException("User không tồn tại", 404);
+        if (user.TwoFactorEnabled)
+            throw new AppException("Bảo mật 2 lớp đã được bật.");
+        if (string.IsNullOrEmpty(user.TotpSecret))
+            throw new AppException("Chưa khởi tạo cài đặt 2FA. Vui lòng gọi setup trước.");
+        if (!_totp.Verify(user.TotpSecret, code))
+            throw new AppException("Mã xác thực không đúng hoặc đã hết hạn.");
+        user.TwoFactorEnabled = true;
+        await _db.SaveChangesAsync(ct);
+        return Map(user);
+    }
+
+    public async Task<UserDto> Disable2FaAsync(Guid userId, string code, CancellationToken ct)
+    {
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct)
+            ?? throw new AppException("User không tồn tại", 404);
+        if (!user.TwoFactorEnabled)
+            throw new AppException("Bảo mật 2 lớp chưa được bật.");
+        if (!_totp.Verify(user.TotpSecret!, code))
+            throw new AppException("Mã xác thực không đúng hoặc đã hết hạn.");
+        user.TwoFactorEnabled = false;
+        user.TotpSecret = null;
+        await _db.SaveChangesAsync(ct);
+        return Map(user);
+    }
+
     public static UserDto Map(User u) => new(
         u.Id, u.Email, u.Username, u.DisplayName, u.Role.ToString(),
-        u.WalletBalance, u.LoyaltyPoints, u.KycStatus.ToString(), u.AvatarColor, u.PhoneNumber);
+        u.WalletBalance, u.LoyaltyPoints, u.KycStatus.ToString(), u.AvatarColor, u.PhoneNumber,
+        u.TwoFactorEnabled);
 
     private sealed class GoogleTokenInfo
     {

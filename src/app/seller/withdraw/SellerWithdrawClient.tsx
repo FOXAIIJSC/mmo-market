@@ -5,6 +5,7 @@ import { ArrowDownToLine, Loader2 } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { TotpVerifyModal } from "@/components/TotpVerifyModal";
 import { sellerNav } from "@/lib/sellerNav";
 import { useAuth } from "@/lib/AuthContext";
 import { apiFetch } from "@/lib/api";
@@ -19,13 +20,15 @@ const statusTone: Record<string, "success" | "warning" | "danger" | "muted"> = {
 };
 
 export function SellerWithdrawClient() {
-  const { token, loading: authLoading } = useAuth();
+  const { user, token, loading: authLoading } = useAuth();
   const [dash, setDash] = useState<ApiSellerDashboard | null>(null);
   const [withdraws, setWithdraws] = useState<ApiSellerWithdraw[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ amount: 0, method: "Bank", account: "", note: "" });
+  const [totpModal, setTotpModal] = useState(false);
+  const [totpErr, setTotpErr] = useState<string | null>(null);
 
   const reload = async () => {
     if (!token) return;
@@ -51,8 +54,7 @@ export function SellerWithdrawClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitWithdraw = async (totpCode?: string) => {
     if (!token) return;
     setSubmitting(true);
     try {
@@ -64,15 +66,29 @@ export function SellerWithdrawClient() {
           method: form.method,
           account: form.account,
           note: form.note,
+          totpCode: totpCode ?? null,
         }),
       });
       setForm({ amount: 0, method: form.method, account: "", note: "" });
+      setTotpModal(false);
       await reload();
     } catch (e) {
-      alert((e as Error).message);
+      throw e;
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    if (user?.twoFactorEnabled) {
+      setTotpErr(null);
+      setTotpModal(true);
+      return;
+    }
+    try { await submitWithdraw(); }
+    catch (e) { alert((e as Error).message); }
   };
 
   if (authLoading || loading) {
@@ -110,6 +126,20 @@ export function SellerWithdrawClient() {
       title="Rút tiền"
       subtitle="Sàn giữ 5% phí · sẽ thanh toán trong 1-2 ngày làm việc"
     >
+      {totpModal && (
+        <TotpVerifyModal
+          title="Xác thực 2FA — Rút tiền"
+          description="Nhập mã 6 chữ số từ Google Authenticator để xác nhận yêu cầu rút tiền."
+          error={totpErr}
+          loading={submitting}
+          onConfirm={async (code) => {
+            setTotpErr(null);
+            try { await submitWithdraw(code); }
+            catch (e) { setTotpErr((e as Error).message || "Mã không đúng, vui lòng thử lại."); }
+          }}
+          onCancel={() => { setTotpModal(false); setTotpErr(null); }}
+        />
+      )}
       <div className="grid gap-4 md:grid-cols-3">
         <div className="md:col-span-2 rounded-3xl border border-border bg-gradient-to-br from-brand/30 via-bg-card to-accent/20 p-6">
           <div className="text-xs font-medium uppercase tracking-wider text-text-muted">Số dư có thể rút</div>

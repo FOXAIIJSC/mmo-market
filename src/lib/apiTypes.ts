@@ -74,6 +74,12 @@ export type ApiUser = {
   kycStatus: string;
   avatarColor: string;
   phoneNumber?: string | null;
+  twoFactorEnabled: boolean;
+};
+
+export type ApiTwoFaSetup = {
+  qrUrl: string;
+  secret: string;
 };
 
 export type ApiAuthResponse = {
