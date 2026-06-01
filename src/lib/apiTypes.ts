@@ -145,6 +145,18 @@ export type ApiVietQrResult = {
   transferNote: string;
 };
 
+export type ApiUsdtPayResult = {
+  address: string;
+  usdtAmount: number;
+  qrImageUrl: string;
+  exchangeRate: number;
+};
+
+export type ApiUsdtCheckResult = {
+  found: boolean;
+  alreadyPaid?: boolean;
+};
+
 export type ApiWalletTxn = {
   id: string;
   type: string;

@@ -11,15 +11,18 @@ namespace MmoMarket.Api.Controllers;
 [Route("api/orders")]
 public class OrderController : ControllerBase
 {
-    private readonly OrderService _svc;
-    private readonly MoMoService _momo;
+    private readonly OrderService  _svc;
+    private readonly MoMoService   _momo;
     private readonly ZaloPayService _zalo;
-    private readonly VNPayService _vnpay;
+    private readonly VNPayService  _vnpay;
     private readonly VietQrService _vietqr;
-    private readonly ICurrentUser _user;
+    private readonly UsdtService   _usdt;
+    private readonly ICurrentUser  _user;
 
-    public OrderController(OrderService svc, MoMoService momo, ZaloPayService zalo, VNPayService vnpay, VietQrService vietqr, ICurrentUser user)
-    { _svc = svc; _momo = momo; _zalo = zalo; _vnpay = vnpay; _vietqr = vietqr; _user = user; }
+    public OrderController(
+        OrderService svc, MoMoService momo, ZaloPayService zalo,
+        VNPayService vnpay, VietQrService vietqr, UsdtService usdt, ICurrentUser user)
+    { _svc = svc; _momo = momo; _zalo = zalo; _vnpay = vnpay; _vietqr = vietqr; _usdt = usdt; _user = user; }
 
     private Guid Uid => _user.UserId ?? throw new AppException("Unauthorized", 401);
 
@@ -34,8 +37,7 @@ public class OrderController : ControllerBase
     {
         var order = await _svc.GetByIdAsync(Uid, id, ct)
             ?? throw new AppException("Không tìm thấy đơn", 404);
-        if (order.Status != "PendingPayment")
-            throw new AppException("Đơn không ở trạng thái chờ thanh toán");
+        if (order.Status != "PendingPayment") throw new AppException("Đơn không ở trạng thái chờ thanh toán");
         return await _momo.CreatePaymentAsync(id, order.Total, order.Code);
     }
 
@@ -44,8 +46,7 @@ public class OrderController : ControllerBase
     {
         var order = await _svc.GetByIdAsync(Uid, id, ct)
             ?? throw new AppException("Không tìm thấy đơn", 404);
-        if (order.Status != "PendingPayment")
-            throw new AppException("Đơn không ở trạng thái chờ thanh toán");
+        if (order.Status != "PendingPayment") throw new AppException("Đơn không ở trạng thái chờ thanh toán");
         return await _zalo.CreatePaymentAsync(id, order.Total, order.Code);
     }
 
@@ -54,8 +55,7 @@ public class OrderController : ControllerBase
     {
         var order = await _svc.GetByIdAsync(Uid, id, ct)
             ?? throw new AppException("Không tìm thấy đơn", 404);
-        if (order.Status != "PendingPayment")
-            throw new AppException("Đơn không ở trạng thái chờ thanh toán");
+        if (order.Status != "PendingPayment") throw new AppException("Đơn không ở trạng thái chờ thanh toán");
         return _vietqr.GenerateQr(order.Total, order.Code);
     }
 
@@ -64,10 +64,39 @@ public class OrderController : ControllerBase
     {
         var order = await _svc.GetByIdAsync(Uid, id, ct)
             ?? throw new AppException("Không tìm thấy đơn", 404);
-        if (order.Status != "PendingPayment")
-            throw new AppException("Đơn không ở trạng thái chờ thanh toán");
+        if (order.Status != "PendingPayment") throw new AppException("Đơn không ở trạng thái chờ thanh toán");
         var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
         return _vnpay.CreatePaymentUrl(id, order.Total, order.Code, ip);
+    }
+
+    [HttpPost("{id:guid}/usdt-pay")]
+    public async Task<UsdtPayResult> UsdtPay(Guid id, CancellationToken ct)
+    {
+        var order = await _svc.GetByIdAsync(Uid, id, ct)
+            ?? throw new AppException("Không tìm thấy đơn", 404);
+        if (order.Status != "PendingPayment") throw new AppException("Đơn không ở trạng thái chờ thanh toán");
+        return _usdt.GeneratePaymentInfo(id, order.Total, order.Code);
+    }
+
+    /// <summary>
+    /// Client calls this to trigger a TronGrid scan and auto-confirm if matching USDT tx is found.
+    /// Designed for polling from the USDT payment modal (every ~30 s).
+    /// </summary>
+    [HttpPost("{id:guid}/usdt-check")]
+    public async Task<IActionResult> UsdtCheck(Guid id, CancellationToken ct)
+    {
+        var order = await _svc.GetByIdAsync(Uid, id, ct)
+            ?? throw new AppException("Không tìm thấy đơn", 404);
+        if (order.PaymentMethod != "Usdt")
+            return BadRequest(new { found = false, error = "Not a USDT order" });
+        if (order.Status != "PendingPayment")
+            return Ok(new { found = false, alreadyPaid = true });
+
+        var found = await _usdt.CheckTransactionAsync(id, order.Total, order.CreatedAt, ct);
+        if (found)
+            await _svc.ConfirmExternalPaymentAsync(id, ct);
+
+        return Ok(new { found });
     }
 
     [HttpPost("{id:guid}/confirm")]

@@ -40,6 +40,7 @@ public static class DependencyInjection
         services.AddScoped<ZaloPayService>();
         services.AddScoped<VNPayService>();
         services.AddScoped<VietQrService>();
+        services.AddScoped<UsdtService>();
         return services;
     }
 }

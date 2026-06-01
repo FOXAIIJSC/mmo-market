@@ -8,9 +8,10 @@ import { MoMoPayModal } from "@/components/MoMoPayModal";
 import { ZaloPayModal } from "@/components/ZaloPayModal";
 import { VNPayModal } from "@/components/VNPayModal";
 import { VietQrModal } from "@/components/VietQrModal";
+import { UsdtPayModal } from "@/components/UsdtPayModal";
 import { useAuth } from "@/lib/AuthContext";
 import { apiFetch } from "@/lib/api";
-import type { ApiCart, ApiMoMoPayResult, ApiOrder, ApiValidateResult, ApiVietQrResult, ApiVNPayResult, ApiZaloPayResult } from "@/lib/apiTypes";
+import type { ApiCart, ApiMoMoPayResult, ApiOrder, ApiUsdtPayResult, ApiValidateResult, ApiVietQrResult, ApiVNPayResult, ApiZaloPayResult } from "@/lib/apiTypes";
 import { formatVND } from "@/lib/format";
 
 type PaymentMethodOption = {
@@ -28,7 +29,7 @@ const methods: PaymentMethodOption[] = [
   { v: "Momo", label: "Ví MoMo", desc: "Quét mã QR hoặc đăng nhập MoMo để thanh toán", icon: Wallet, fee: 0 },
   { v: "ZaloPay", label: "ZaloPay", desc: "Quét mã QR hoặc đăng nhập ZaloPay để thanh toán", icon: Wallet, fee: 0 },
   { v: "VnPay", label: "VNPay", desc: "Thanh toán qua cổng VNPay — ATM nội địa, Visa/Master, QR Code", icon: CreditCard, fee: 5_000 },
-  { v: "Usdt", label: "USDT (TRC20)", desc: "Mock — chưa tích hợp gateway", icon: Bitcoin, fee: 0 },
+  { v: "Usdt", label: "USDT (TRC20)", desc: "Gửi USDT trên mạng TRON — xác nhận tự động qua TronGrid", icon: Bitcoin, fee: 0 },
 ];
 
 export function CheckoutView() {
@@ -48,6 +49,7 @@ export function CheckoutView() {
   const [zaloModal, setZaloModal] = useState<{ order: ApiOrder; result: ApiZaloPayResult } | null>(null);
   const [vnpayModal, setVnpayModal] = useState<{ order: ApiOrder; result: ApiVNPayResult } | null>(null);
   const [vietqrModal, setVietqrModal] = useState<{ order: ApiOrder; result: ApiVietQrResult } | null>(null);
+  const [usdtModal, setUsdtModal] = useState<{ order: ApiOrder; result: ApiUsdtPayResult } | null>(null);
 
   useEffect(() => {
     if (!authLoading && !token) {
@@ -97,7 +99,14 @@ export function CheckoutView() {
         body: JSON.stringify({ paymentMethod: method, note, couponCode: couponApplied?.code ?? null }),
       });
 
-      if (method === "VietQr") {
+      if (method === "Usdt") {
+        const usdtResult = await apiFetch<ApiUsdtPayResult>(`/api/orders/${order.id}/usdt-pay`, {
+          method: "POST",
+          token,
+        });
+        await refresh();
+        setUsdtModal({ order, result: usdtResult });
+      } else if (method === "VietQr") {
         const vietqrResult = await apiFetch<ApiVietQrResult>(`/api/orders/${order.id}/vietqr-pay`, {
           method: "POST",
           token,
@@ -159,6 +168,23 @@ export function CheckoutView() {
 
   return (
     <>
+    {usdtModal && token && (
+      <UsdtPayModal
+        orderId={usdtModal.order.id}
+        orderCode={usdtModal.order.code}
+        total={usdtModal.order.total}
+        usdtResult={usdtModal.result}
+        token={token}
+        onSuccess={() => {
+          setUsdtModal(null);
+          router.push(`/account/orders?just=${usdtModal.order.id}`);
+        }}
+        onCancel={() => {
+          setUsdtModal(null);
+          router.push(`/account/orders?just=${usdtModal.order.id}`);
+        }}
+      />
+    )}
     {vietqrModal && token && (
       <VietQrModal
         orderId={vietqrModal.order.id}
@@ -358,6 +384,8 @@ export function CheckoutView() {
               <><Loader2 className="size-4 animate-spin mr-2 inline" />Đang xử lý...</>
             ) : !canPay ? (
               "Số dư ví không đủ"
+            ) : method === "Usdt" ? (
+              "Thanh toán bằng USDT"
             ) : method === "VietQr" ? (
               "Xem thông tin chuyển khoản"
             ) : method === "Momo" ? (
