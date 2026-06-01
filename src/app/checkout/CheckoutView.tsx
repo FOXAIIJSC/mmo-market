@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Wallet, QrCode, CreditCard, Bitcoin, ShieldCheck, Loader2, AlertCircle, CheckCircle2, Tag, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { MoMoPayModal } from "@/components/MoMoPayModal";
 import { useAuth } from "@/lib/AuthContext";
 import { apiFetch } from "@/lib/api";
-import type { ApiCart, ApiOrder, ApiValidateResult } from "@/lib/apiTypes";
+import type { ApiCart, ApiMoMoPayResult, ApiOrder, ApiValidateResult } from "@/lib/apiTypes";
 import { formatVND } from "@/lib/format";
 
 type PaymentMethodOption = {
@@ -21,7 +22,7 @@ type PaymentMethodOption = {
 const methods: PaymentMethodOption[] = [
   { v: "Wallet", label: "Ví nội bộ MMO", desc: "Trừ trực tiếp số dư ví — duyệt tức thời", icon: Wallet, fee: 0, badge: "Khuyến nghị" },
   { v: "VietQr", label: "VietQR / Chuyển khoản", desc: "Mock — sẽ ghi nhận khi tích hợp SePay", icon: QrCode, fee: 0 },
-  { v: "Momo", label: "Ví MoMo", desc: "Mock — chưa tích hợp gateway", icon: Wallet, fee: 0 },
+  { v: "Momo", label: "Ví MoMo", desc: "Quét mã QR hoặc đăng nhập MoMo để thanh toán", icon: Wallet, fee: 0 },
   { v: "ZaloPay", label: "ZaloPay", desc: "Mock — chưa tích hợp gateway", icon: Wallet, fee: 0 },
   { v: "VnPay", label: "VNPay", desc: "Mock — chưa tích hợp gateway", icon: CreditCard, fee: 5_000 },
   { v: "Usdt", label: "USDT (TRC20)", desc: "Mock — chưa tích hợp gateway", icon: Bitcoin, fee: 0 },
@@ -40,6 +41,7 @@ export function CheckoutView() {
   const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number; message: string } | null>(null);
   const [couponChecking, setCouponChecking] = useState(false);
   const [couponErr, setCouponErr] = useState<string | null>(null);
+  const [momoModal, setMomoModal] = useState<{ order: ApiOrder; result: ApiMoMoPayResult } | null>(null);
 
   useEffect(() => {
     if (!authLoading && !token) {
@@ -88,8 +90,18 @@ export function CheckoutView() {
         token,
         body: JSON.stringify({ paymentMethod: method, note, couponCode: couponApplied?.code ?? null }),
       });
-      await refresh();
-      router.push(`/account/orders?just=${order.id}`);
+
+      if (method === "Momo") {
+        const momoResult = await apiFetch<ApiMoMoPayResult>(`/api/orders/${order.id}/momo-pay`, {
+          method: "POST",
+          token,
+        });
+        await refresh();
+        setMomoModal({ order, result: momoResult });
+      } else {
+        await refresh();
+        router.push(`/account/orders?just=${order.id}`);
+      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Lỗi đặt hàng");
     } finally {
@@ -119,6 +131,24 @@ export function CheckoutView() {
   const canPay = method !== "Wallet" || (user && user.walletBalance >= total);
 
   return (
+    <>
+    {momoModal && token && (
+      <MoMoPayModal
+        orderId={momoModal.order.id}
+        orderCode={momoModal.order.code}
+        total={momoModal.order.total}
+        momoResult={momoModal.result}
+        token={token}
+        onSuccess={() => {
+          setMomoModal(null);
+          router.push(`/account/orders?just=${momoModal.order.id}`);
+        }}
+        onCancel={() => {
+          setMomoModal(null);
+          router.push(`/account/orders?just=${momoModal.order.id}`);
+        }}
+      />
+    )}
     <div className="grid gap-6 lg:grid-cols-12">
       <div className="lg:col-span-8 space-y-4">
         {err && (
@@ -250,6 +280,8 @@ export function CheckoutView() {
               <><Loader2 className="size-4 animate-spin mr-2 inline" />Đang xử lý...</>
             ) : !canPay ? (
               "Số dư ví không đủ"
+            ) : method === "Momo" ? (
+              "Thanh toán bằng MoMo"
             ) : (
               "Đặt hàng"
             )}
@@ -260,5 +292,6 @@ export function CheckoutView() {
         </div>
       </aside>
     </div>
+    </>
   );
 }

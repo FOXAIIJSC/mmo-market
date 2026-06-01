@@ -121,6 +121,13 @@ export type ApiOrder = {
   lines: ApiOrderLine[];
 };
 
+export type ApiMoMoPayResult = {
+  payUrl: string;
+  deepLink?: string | null;
+  qrCodeUrl?: string | null;
+  requestId: string;
+};
+
 export type ApiWalletTxn = {
   id: string;
   type: string;

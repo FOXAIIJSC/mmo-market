@@ -186,6 +186,21 @@ public class OrderService
         return order == null ? null : Map(order);
     }
 
+    // Idempotent: called by MoMo IPN or return-URL verification to mark an external payment as paid.
+    public async Task<bool> ConfirmExternalPaymentAsync(Guid orderId, CancellationToken ct)
+    {
+        var order = await _db.Orders.Include(o => o.Lines)
+            .FirstOrDefaultAsync(o => o.Id == orderId, ct);
+        if (order == null) return false;
+        if (order.Status != OrderStatus.PendingPayment) return true; // already confirmed
+
+        order.Status = OrderStatus.Paid;
+        order.PaidAt = DateTime.UtcNow;
+        await ProcessPaidOrderAsync(order, ct);
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
     public async Task<OrderDto> ConfirmReceivedAsync(Guid userId, Guid id, CancellationToken ct)
     {
         var order = await _db.Orders.Include(o => o.Lines).FirstOrDefaultAsync(o => o.Id == id && o.BuyerId == userId, ct)

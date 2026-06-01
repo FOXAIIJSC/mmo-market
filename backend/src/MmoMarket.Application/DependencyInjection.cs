@@ -12,6 +12,7 @@ using MmoMarket.Application.Config;
 using MmoMarket.Application.Messages;
 using MmoMarket.Application.Coupons;
 using MmoMarket.Application.Notifications;
+using MmoMarket.Application.Payments;
 using MmoMarket.Application.Wishlist;
 
 namespace MmoMarket.Application;
@@ -35,6 +36,7 @@ public static class DependencyInjection
         services.AddScoped<CouponService>();
         services.AddScoped<ConfigService>();
         services.AddScoped<MessageService>();
+        services.AddScoped<MoMoService>();
         return services;
     }
 }
