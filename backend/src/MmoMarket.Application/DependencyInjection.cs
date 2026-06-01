@@ -37,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<ConfigService>();
         services.AddScoped<MessageService>();
         services.AddScoped<MoMoService>();
+        services.AddScoped<ZaloPayService>();
         return services;
     }
 }

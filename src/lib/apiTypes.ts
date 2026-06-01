@@ -128,6 +128,11 @@ export type ApiMoMoPayResult = {
   requestId: string;
 };
 
+export type ApiZaloPayResult = {
+  orderUrl: string;
+  zpTransToken: string;
+};
+
 export type ApiWalletTxn = {
   id: string;
   type: string;

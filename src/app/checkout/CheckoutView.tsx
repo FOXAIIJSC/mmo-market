@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { Wallet, QrCode, CreditCard, Bitcoin, ShieldCheck, Loader2, AlertCircle, CheckCircle2, Tag, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { MoMoPayModal } from "@/components/MoMoPayModal";
+import { ZaloPayModal } from "@/components/ZaloPayModal";
 import { useAuth } from "@/lib/AuthContext";
 import { apiFetch } from "@/lib/api";
-import type { ApiCart, ApiMoMoPayResult, ApiOrder, ApiValidateResult } from "@/lib/apiTypes";
+import type { ApiCart, ApiMoMoPayResult, ApiOrder, ApiValidateResult, ApiZaloPayResult } from "@/lib/apiTypes";
 import { formatVND } from "@/lib/format";
 
 type PaymentMethodOption = {
@@ -23,7 +24,7 @@ const methods: PaymentMethodOption[] = [
   { v: "Wallet", label: "Ví nội bộ MMO", desc: "Trừ trực tiếp số dư ví — duyệt tức thời", icon: Wallet, fee: 0, badge: "Khuyến nghị" },
   { v: "VietQr", label: "VietQR / Chuyển khoản", desc: "Mock — sẽ ghi nhận khi tích hợp SePay", icon: QrCode, fee: 0 },
   { v: "Momo", label: "Ví MoMo", desc: "Quét mã QR hoặc đăng nhập MoMo để thanh toán", icon: Wallet, fee: 0 },
-  { v: "ZaloPay", label: "ZaloPay", desc: "Mock — chưa tích hợp gateway", icon: Wallet, fee: 0 },
+  { v: "ZaloPay", label: "ZaloPay", desc: "Quét mã QR hoặc đăng nhập ZaloPay để thanh toán", icon: Wallet, fee: 0 },
   { v: "VnPay", label: "VNPay", desc: "Mock — chưa tích hợp gateway", icon: CreditCard, fee: 5_000 },
   { v: "Usdt", label: "USDT (TRC20)", desc: "Mock — chưa tích hợp gateway", icon: Bitcoin, fee: 0 },
 ];
@@ -42,6 +43,7 @@ export function CheckoutView() {
   const [couponChecking, setCouponChecking] = useState(false);
   const [couponErr, setCouponErr] = useState<string | null>(null);
   const [momoModal, setMomoModal] = useState<{ order: ApiOrder; result: ApiMoMoPayResult } | null>(null);
+  const [zaloModal, setZaloModal] = useState<{ order: ApiOrder; result: ApiZaloPayResult } | null>(null);
 
   useEffect(() => {
     if (!authLoading && !token) {
@@ -98,6 +100,13 @@ export function CheckoutView() {
         });
         await refresh();
         setMomoModal({ order, result: momoResult });
+      } else if (method === "ZaloPay") {
+        const zaloResult = await apiFetch<ApiZaloPayResult>(`/api/orders/${order.id}/zalopay-pay`, {
+          method: "POST",
+          token,
+        });
+        await refresh();
+        setZaloModal({ order, result: zaloResult });
       } else {
         await refresh();
         router.push(`/account/orders?just=${order.id}`);
@@ -146,6 +155,23 @@ export function CheckoutView() {
         onCancel={() => {
           setMomoModal(null);
           router.push(`/account/orders?just=${momoModal.order.id}`);
+        }}
+      />
+    )}
+    {zaloModal && token && (
+      <ZaloPayModal
+        orderId={zaloModal.order.id}
+        orderCode={zaloModal.order.code}
+        total={zaloModal.order.total}
+        zaloResult={zaloModal.result}
+        token={token}
+        onSuccess={() => {
+          setZaloModal(null);
+          router.push(`/account/orders?just=${zaloModal.order.id}`);
+        }}
+        onCancel={() => {
+          setZaloModal(null);
+          router.push(`/account/orders?just=${zaloModal.order.id}`);
         }}
       />
     )}
@@ -282,6 +308,8 @@ export function CheckoutView() {
               "Số dư ví không đủ"
             ) : method === "Momo" ? (
               "Thanh toán bằng MoMo"
+            ) : method === "ZaloPay" ? (
+              "Thanh toán bằng ZaloPay"
             ) : (
               "Đặt hàng"
             )}

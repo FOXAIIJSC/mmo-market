@@ -1,0 +1,170 @@
+"use client";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { CheckCircle2, Loader2, ExternalLink, X, Clock, Smartphone } from "lucide-react";
+import { apiFetch } from "@/lib/api";
+import type { ApiZaloPayResult, ApiOrder } from "@/lib/apiTypes";
+import { formatVND } from "@/lib/format";
+
+const ZALO_BLUE = "#0068ff";
+const TIMEOUT_SECS = 10 * 60;
+
+// Generate QR code URL from ZaloPay order URL using qrserver.com
+function qrSrc(orderUrl: string) {
+  return `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(orderUrl)}&size=200x200&margin=8`;
+}
+
+export function ZaloPayModal({
+  orderId,
+  orderCode,
+  total,
+  zaloResult,
+  token,
+  onSuccess,
+  onCancel,
+}: {
+  orderId: string;
+  orderCode: string;
+  total: number;
+  zaloResult: ApiZaloPayResult;
+  token: string;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const [phase, setPhase] = useState<"waiting" | "success" | "failed">("waiting");
+  const [timeLeft, setTimeLeft] = useState(TIMEOUT_SECS);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopAll = useCallback(() => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    if (timerRef.current) clearInterval(timerRef.current);
+  }, []);
+
+  useEffect(() => {
+    timerRef.current = setInterval(() => {
+      setTimeLeft(t => {
+        if (t <= 1) { stopAll(); setPhase("failed"); return 0; }
+        return t - 1;
+      });
+    }, 1000);
+
+    pollRef.current = setInterval(async () => {
+      try {
+        const order = await apiFetch<ApiOrder>(`/api/orders/${orderId}`, { token });
+        if (order.status !== "PendingPayment") {
+          stopAll();
+          setPhase(order.status === "Cancelled" ? "failed" : "success");
+        }
+      } catch { /* ignore */ }
+    }, 3000);
+
+    return stopAll;
+  }, [orderId, token, stopAll]);
+
+  useEffect(() => {
+    if (phase === "success") {
+      const t = setTimeout(onSuccess, 1500);
+      return () => clearTimeout(t);
+    }
+  }, [phase, onSuccess]);
+
+  const mins = String(Math.floor(timeLeft / 60)).padStart(2, "0");
+  const secs = String(timeLeft % 60).padStart(2, "0");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-sm overflow-hidden rounded-3xl border border-border bg-bg-card shadow-2xl">
+        {/* ZaloPay header */}
+        <div
+          className="flex items-center justify-between px-5 py-4 text-white"
+          style={{ background: ZALO_BLUE }}
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="grid size-8 place-items-center rounded-full bg-white/20 text-sm font-black">ZP</div>
+            <span className="font-bold tracking-wide">Thanh toán ZaloPay</span>
+          </div>
+          {phase === "waiting" && (
+            <button onClick={onCancel} className="opacity-70 transition hover:opacity-100">
+              <X className="size-5" />
+            </button>
+          )}
+        </div>
+
+        <div className="px-6 py-5 text-center">
+          {phase === "waiting" && (
+            <>
+              <p className="text-xs text-text-muted">
+                Đơn hàng <span className="font-mono font-bold text-text">{orderCode}</span>
+              </p>
+              <p className="num mt-1 mb-5 text-2xl font-extrabold text-accent">{formatVND(total)}</p>
+
+              {/* QR from payment URL */}
+              <div className="mb-4">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={qrSrc(zaloResult.orderUrl)}
+                  alt="ZaloPay QR Code"
+                  width={200}
+                  height={200}
+                  className="mx-auto rounded-xl border border-border"
+                />
+                <p className="mt-2 text-xs text-text-muted">
+                  <Smartphone className="mr-1 inline size-3.5" />
+                  Mở ứng dụng ZaloPay và quét mã QR
+                </p>
+              </div>
+
+              <div className="mb-4 flex items-center justify-center gap-1.5 text-sm text-text-muted">
+                <Clock className="size-4" />
+                Hết hạn sau{" "}
+                <span className="font-mono font-bold text-text">{mins}:{secs}</span>
+              </div>
+
+              <a
+                href={zaloResult.orderUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+                style={{ background: ZALO_BLUE }}
+              >
+                <ExternalLink className="size-4" />
+                Mở trang web ZaloPay
+              </a>
+
+              <p className="flex items-center justify-center gap-1.5 text-xs text-text-muted">
+                <Loader2 className="size-3 animate-spin" />
+                Đang chờ xác nhận thanh toán...
+              </p>
+            </>
+          )}
+
+          {phase === "success" && (
+            <div className="py-8">
+              <CheckCircle2 className="mx-auto mb-3 size-16 text-success" />
+              <p className="text-xl font-bold text-text">Thanh toán thành công!</p>
+              <p className="mt-1 text-sm text-text-muted">Đang chuyển đến đơn hàng…</p>
+            </div>
+          )}
+
+          {phase === "failed" && (
+            <div className="py-8">
+              <div className="mx-auto mb-3 grid size-16 place-items-center rounded-full bg-danger/10">
+                <X className="size-8 text-danger" />
+              </div>
+              <p className="text-xl font-bold text-text">Thanh toán thất bại</p>
+              <p className="mt-1 text-sm text-text-muted">
+                Hết thời gian hoặc giao dịch bị từ chối
+              </p>
+              <button
+                onClick={onCancel}
+                className="mt-5 rounded-xl border border-border px-8 py-2.5 text-sm font-semibold text-text transition hover:bg-bg-elev"
+              >
+                Đóng
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
