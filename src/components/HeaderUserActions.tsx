@@ -99,6 +99,14 @@ export function HeaderUserActions() {
           <LayoutDashboard className="size-4" />
           Kênh bán hàng
         </Link>
+        <button
+          onClick={logout}
+          className="hidden rounded-full p-2 text-text-muted hover:bg-bg-elev hover:text-danger md:block"
+          aria-label="Đăng xuất"
+          title="Đăng xuất"
+        >
+          <LogOut className="size-4" />
+        </button>
         <Link
           href="/account"
           className="grid h-9 w-9 place-items-center rounded-full bg-bg-elev text-text hover:border-brand md:hidden"
@@ -149,6 +157,14 @@ export function HeaderUserActions() {
         </span>
         <span className="max-w-20 truncate text-sm">{user.displayName}</span>
       </Link>
+      <button
+        onClick={logout}
+        className="hidden rounded-full p-2 text-text-muted hover:bg-bg-elev hover:text-danger md:block"
+        aria-label="Đăng xuất"
+        title="Đăng xuất"
+      >
+        <LogOut className="size-4" />
+      </button>
       <Link
         href="/account"
         className="grid h-9 w-9 place-items-center rounded-full bg-bg-elev text-text md:hidden"

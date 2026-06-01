@@ -39,9 +39,13 @@ public class CouponService
         Guid userId, string code, decimal orderAmount, CancellationToken ct)
     {
         var now = DateTime.UtcNow;
+        var normalCode = code.Trim().ToUpperInvariant();
         var coupon = await _db.Coupons
-            .FirstOrDefaultAsync(c => c.Code == code.Trim().ToUpperInvariant(), ct);
+            .FirstOrDefaultAsync(c => c.Code == normalCode, ct);
 
+        // Fall back to seller coupons if not found in platform coupons
+        if (coupon is null)
+            return await ValidateSellerCouponAsync(userId, normalCode, orderAmount, now, ct);
         if (coupon is null)
             return new(false, "Mã giảm giá không tồn tại", 0, null);
         if (!coupon.IsActive)
@@ -74,18 +78,48 @@ public class CouponService
     public async Task RecordUsageAsync(
         Guid userId, string code, Guid orderId, CancellationToken ct)
     {
-        var coupon = await _db.Coupons
-            .FirstOrDefaultAsync(c => c.Code == code.Trim().ToUpperInvariant(), ct);
-        if (coupon is null) return;
-
-        coupon.UsedCount++;
-        _db.CouponUsages.Add(new CouponUsage
+        var normalCode = code.Trim().ToUpperInvariant();
+        var coupon = await _db.Coupons.FirstOrDefaultAsync(c => c.Code == normalCode, ct);
+        if (coupon != null)
         {
-            CouponId = coupon.Id,
-            UserId = userId,
-            OrderId = orderId,
-        });
-        await _db.SaveChangesAsync(ct);
+            coupon.UsedCount++;
+            _db.CouponUsages.Add(new CouponUsage { CouponId = coupon.Id, UserId = userId, OrderId = orderId });
+            await _db.SaveChangesAsync(ct);
+            return;
+        }
+        // Seller coupon
+        var sellerCoupon = await _db.SellerCoupons.FirstOrDefaultAsync(c => c.Code == normalCode, ct);
+        if (sellerCoupon != null)
+        {
+            sellerCoupon.UsedCount++;
+            await _db.SaveChangesAsync(ct);
+        }
+    }
+
+    private async Task<ValidateResult> ValidateSellerCouponAsync(
+        Guid userId, string code, decimal orderAmount, DateTime now, CancellationToken ct)
+    {
+        var coupon = await _db.SellerCoupons
+            .FirstOrDefaultAsync(c => c.Code == code, ct);
+        if (coupon is null)
+            return new(false, "Mã giảm giá không tồn tại", 0, null);
+        if (!coupon.IsActive)
+            return new(false, "Mã giảm giá không còn hiệu lực", 0, null);
+        if (coupon.ExpiresAt.HasValue && coupon.ExpiresAt < now)
+            return new(false, "Mã giảm giá đã hết hạn", 0, null);
+        if (coupon.MaxUses > 0 && coupon.UsedCount >= coupon.MaxUses)
+            return new(false, "Mã giảm giá đã hết lượt sử dụng", 0, null);
+        if (orderAmount < coupon.MinOrderAmount)
+            return new(false, $"Đơn hàng tối thiểu {coupon.MinOrderAmount:N0}₫ để dùng mã này", 0, null);
+
+        var discount = coupon.Type == CouponType.Percent
+            ? Math.Min(orderAmount * coupon.Value / 100m, coupon.MaxDiscount ?? decimal.MaxValue)
+            : Math.Min(coupon.Value, orderAmount);
+        discount = Math.Round(discount, 0);
+        var msg = coupon.Type == CouponType.Percent
+            ? $"Giảm {coupon.Value}% — tiết kiệm {discount:N0}₫"
+            : $"Giảm {discount:N0}₫";
+        return new(true, null, discount, msg);
     }
 
     private static CouponDto Map(Coupon c, bool usedByMe) => new(

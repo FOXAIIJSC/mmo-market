@@ -17,6 +17,7 @@ public static class Seeder
         await SeedDemoCouponsAsync(db, ct);
         await SeedDemoBannersAsync(db, ct);
         await SeedDemoFlashSalesAsync(db, ct);
+        await SeedDemoSellerCouponsAsync(db, ct);
         await SeedDefaultConfigAsync(db, ct);
         await SeedDemoLoyaltyRewardsAsync(db, ct);
         if (await db.Categories.AnyAsync(ct)) return;
@@ -291,6 +292,25 @@ public static class Seeder
                 UpdatedAt TEXT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS SellerCoupons (
+                Id TEXT NOT NULL CONSTRAINT PK_SellerCoupons PRIMARY KEY,
+                SellerId TEXT NOT NULL,
+                Code TEXT NOT NULL,
+                Description TEXT NOT NULL DEFAULT '',
+                Type INTEGER NOT NULL DEFAULT 0,
+                Value TEXT NOT NULL DEFAULT '0',
+                MinOrderAmount TEXT NOT NULL DEFAULT '0',
+                MaxDiscount TEXT NULL,
+                MaxUses INTEGER NOT NULL DEFAULT 0,
+                UsedCount INTEGER NOT NULL DEFAULT 0,
+                ExpiresAt TEXT NULL,
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS IX_SellerCoupons_SellerId_Code ON SellerCoupons(SellerId, Code);
+            CREATE INDEX IF NOT EXISTS IX_SellerCoupons_SellerId ON SellerCoupons(SellerId);
+
             CREATE TABLE IF NOT EXISTS SiteConfigs (
                 Key TEXT NOT NULL CONSTRAINT PK_SiteConfigs PRIMARY KEY,
                 Value TEXT NOT NULL,
@@ -367,6 +387,40 @@ public static class Seeder
             new Domain.Entities.LoyaltyReward { Title = "Miễn phí giao hàng", Description = "Miễn phí mọi loại phí trên 1 đơn",        PointsCost = 200,  Type = "Shipping", VoucherAmount = 0,      IsActive = true,  Position = 4 },
             new Domain.Entities.LoyaltyReward { Title = "Voucher 200.000₫",   Description = "Áp dụng cho đơn từ 1.000.000₫",           PointsCost = 2000, Type = "Voucher",  VoucherAmount = 200000, IsActive = true,  Position = 5 },
             new Domain.Entities.LoyaltyReward { Title = "Tài khoản Premium",  Description = "1 tháng ChatGPT Plus (giao tự động)",      PointsCost = 5000, Type = "Product",  VoucherAmount = 0,      IsActive = false, IsComingSoon = true, Position = 6 }
+        );
+        await db.SaveChangesAsync(ct);
+    }
+
+    private static async Task SeedDemoSellerCouponsAsync(AppDbContext db, CancellationToken ct)
+    {
+        if (await db.SellerCoupons.AnyAsync(ct)) return;
+        var kimchi = await db.Sellers.FirstOrDefaultAsync(s => s.Username == "kimchi", ct);
+        if (kimchi == null) return;
+        var now = DateTime.UtcNow;
+        db.SellerCoupons.AddRange(
+            new Domain.Entities.SellerCoupon
+            {
+                SellerId = kimchi.Id, Code = "KIMCHI10",
+                Description = "Giảm 10% cho đơn từ 200K", Type = Domain.Enums.CouponType.Percent,
+                Value = 10, MinOrderAmount = 200000, MaxDiscount = 50000,
+                MaxUses = 100, UsedCount = 12, IsActive = true,
+                ExpiresAt = now.AddDays(30),
+            },
+            new Domain.Entities.SellerCoupon
+            {
+                SellerId = kimchi.Id, Code = "KIMCHI50K",
+                Description = "Giảm 50.000₫ cho đơn từ 500K", Type = Domain.Enums.CouponType.Fixed,
+                Value = 50000, MinOrderAmount = 500000,
+                MaxUses = 50, UsedCount = 5, IsActive = true,
+            },
+            new Domain.Entities.SellerCoupon
+            {
+                SellerId = kimchi.Id, Code = "KCSALE20",
+                Description = "Flash sale 20% - đã hết hạn", Type = Domain.Enums.CouponType.Percent,
+                Value = 20, MinOrderAmount = 0, MaxDiscount = 100000,
+                MaxUses = 200, UsedCount = 200, IsActive = false,
+                ExpiresAt = now.AddDays(-5),
+            }
         );
         await db.SaveChangesAsync(ct);
     }

@@ -27,6 +27,12 @@ public record SellerOrderLineDto(
     int Quantity, decimal UnitPrice, decimal LineTotal, string Delivery, string BuyerDisplayName,
     DateTime CreatedAt, DateTime? PaidAt, DateTime? DeliveredAt, DateTime? CompletedAt, string[]? DeliveredItems);
 
+public record SellerReviewDto(Guid Id, Guid ProductId, string ProductTitle, string BuyerName, int Rating, string Comment, DateTime CreatedAt, string? Reply);
+
+public record SellerCouponDto(Guid Id, string Code, string Description, string Type, decimal Value, decimal MinOrderAmount, decimal? MaxDiscount, int MaxUses, int UsedCount, DateTime? ExpiresAt, bool IsActive, DateTime CreatedAt);
+public record CreateSellerCouponDto(string Code, string Description, string Type, decimal Value, decimal MinOrderAmount, decimal? MaxDiscount, int MaxUses, DateTime? ExpiresAt);
+public record UpdateSellerCouponDto(string Code, string Description, string Type, decimal Value, decimal MinOrderAmount, decimal? MaxDiscount, int MaxUses, DateTime? ExpiresAt, bool IsActive);
+
 public record SellerInventoryDto(
     Guid ProductId, string ProductSlug, string ProductTitle,
     int Available, int Reserved, int SoldCount, InventoryItemDto[] Items);
@@ -342,6 +348,95 @@ public class SellerService
     {
         using var sha = System.Security.Cryptography.SHA256.Create();
         return Convert.ToHexString(sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(s))).ToLowerInvariant();
+    }
+
+    // ── Seller Coupons ────────────────────────────────────────────────────────
+    public async Task<SellerCouponDto[]> ListMyCouponsAsync(Guid userId, CancellationToken ct)
+    {
+        var seller = await GetSellerForUserAsync(userId, ct);
+        var coupons = await _db.SellerCoupons
+            .Where(c => c.SellerId == seller.Id)
+            .OrderByDescending(c => c.CreatedAt)
+            .ToListAsync(ct);
+        return coupons.Select(MapSellerCoupon).ToArray();
+    }
+
+    public async Task<SellerCouponDto> CreateSellerCouponAsync(Guid userId, CreateSellerCouponDto dto, CancellationToken ct)
+    {
+        var seller = await GetSellerForUserAsync(userId, ct);
+        var code = dto.Code.Trim().ToUpperInvariant();
+        if (await _db.SellerCoupons.AnyAsync(c => c.SellerId == seller.Id && c.Code == code, ct))
+            throw new AppException("Mã giảm giá này đã tồn tại trong shop của bạn");
+        if (!Enum.TryParse<CouponType>(dto.Type, true, out var type))
+            throw new AppException("Loại coupon không hợp lệ");
+        var coupon = new SellerCoupon
+        {
+            SellerId = seller.Id, Code = code, Description = dto.Description,
+            Type = type, Value = dto.Value, MinOrderAmount = dto.MinOrderAmount,
+            MaxDiscount = dto.MaxDiscount, MaxUses = dto.MaxUses, ExpiresAt = dto.ExpiresAt,
+        };
+        _db.SellerCoupons.Add(coupon);
+        await _db.SaveChangesAsync(ct);
+        return MapSellerCoupon(coupon);
+    }
+
+    public async Task<SellerCouponDto> UpdateSellerCouponAsync(Guid userId, Guid id, UpdateSellerCouponDto dto, CancellationToken ct)
+    {
+        var seller = await GetSellerForUserAsync(userId, ct);
+        var coupon = await _db.SellerCoupons.FirstOrDefaultAsync(c => c.Id == id && c.SellerId == seller.Id, ct)
+            ?? throw new AppException("Không tìm thấy mã giảm giá", 404);
+        var code = dto.Code.Trim().ToUpperInvariant();
+        if (code != coupon.Code && await _db.SellerCoupons.AnyAsync(c => c.SellerId == seller.Id && c.Code == code, ct))
+            throw new AppException("Mã giảm giá này đã tồn tại trong shop của bạn");
+        if (!Enum.TryParse<CouponType>(dto.Type, true, out var type))
+            throw new AppException("Loại coupon không hợp lệ");
+        coupon.Code = code; coupon.Description = dto.Description;
+        coupon.Type = type; coupon.Value = dto.Value;
+        coupon.MinOrderAmount = dto.MinOrderAmount; coupon.MaxDiscount = dto.MaxDiscount;
+        coupon.MaxUses = dto.MaxUses; coupon.ExpiresAt = dto.ExpiresAt;
+        coupon.IsActive = dto.IsActive; coupon.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        return MapSellerCoupon(coupon);
+    }
+
+    public async Task DeleteSellerCouponAsync(Guid userId, Guid id, CancellationToken ct)
+    {
+        var seller = await GetSellerForUserAsync(userId, ct);
+        var coupon = await _db.SellerCoupons.FirstOrDefaultAsync(c => c.Id == id && c.SellerId == seller.Id, ct)
+            ?? throw new AppException("Không tìm thấy mã giảm giá", 404);
+        _db.SellerCoupons.Remove(coupon);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task<SellerCouponDto> ToggleSellerCouponAsync(Guid userId, Guid id, CancellationToken ct)
+    {
+        var seller = await GetSellerForUserAsync(userId, ct);
+        var coupon = await _db.SellerCoupons.FirstOrDefaultAsync(c => c.Id == id && c.SellerId == seller.Id, ct)
+            ?? throw new AppException("Không tìm thấy mã giảm giá", 404);
+        coupon.IsActive = !coupon.IsActive;
+        coupon.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        return MapSellerCoupon(coupon);
+    }
+
+    private static SellerCouponDto MapSellerCoupon(SellerCoupon c) =>
+        new(c.Id, c.Code, c.Description, c.Type.ToString(), c.Value, c.MinOrderAmount,
+            c.MaxDiscount, c.MaxUses, c.UsedCount, c.ExpiresAt, c.IsActive, c.CreatedAt);
+
+    public async Task<SellerReviewDto[]> ListMyReviewsAsync(Guid userId, CancellationToken ct)
+    {
+        var seller = await GetSellerForUserAsync(userId, ct);
+        var productIds = await _db.Products.Where(p => p.SellerId == seller.Id).Select(p => p.Id).ToListAsync(ct);
+        var reviews = await _db.Reviews
+            .Include(r => r.Product)
+            .Include(r => r.User)
+            .Where(r => productIds.Contains(r.ProductId))
+            .OrderByDescending(r => r.CreatedAt)
+            .ToListAsync(ct);
+        return reviews.Select(r => new SellerReviewDto(
+            r.Id, r.ProductId, r.Product?.Title ?? "", r.User?.DisplayName ?? "(buyer)",
+            r.Rating, r.Comment, r.CreatedAt, r.Reply
+        )).ToArray();
     }
 
     public static string Slugify(string s)

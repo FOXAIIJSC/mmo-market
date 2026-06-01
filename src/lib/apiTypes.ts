@@ -472,6 +472,21 @@ export type ApiNotification = {
   createdAt: string;
 };
 
+export type ApiSellerCoupon = {
+  id: string;
+  code: string;
+  description: string;
+  type: "Percent" | "Fixed";
+  value: number;
+  minOrderAmount: number;
+  maxDiscount?: number | null;
+  maxUses: number;
+  usedCount: number;
+  expiresAt?: string | null;
+  isActive: boolean;
+  createdAt: string;
+};
+
 export type ApiSystemSettings = {
   siteName: string;
   siteDescription: string;

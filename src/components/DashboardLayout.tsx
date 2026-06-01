@@ -14,6 +14,7 @@ import {
   Heart,
   Image as ImageIcon,
   LayoutDashboard,
+  LogOut,
   MessageCircle,
   Package,
   Settings,
@@ -28,6 +29,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Logo } from "./Logo";
+import { useAuth } from "@/lib/AuthContext";
 
 const iconMap: Record<string, LucideIcon> = {
   alert: AlertTriangle,
@@ -81,6 +83,7 @@ export function DashboardLayout({
   variant?: "buyer" | "seller" | "admin";
 }) {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
   const variantBadge = {
     buyer: { label: "Buyer", color: "bg-accent text-black" },
     seller: { label: "Seller", color: "bg-brand text-white" },
@@ -148,13 +151,34 @@ export function DashboardLayout({
           ))}
         </nav>
 
-        <div className="border-t border-border p-3">
+        <div className="border-t border-border p-3 space-y-1">
+          {user && (
+            <div className="flex items-center gap-2.5 rounded-xl px-3 py-2">
+              <span
+                className="grid size-7 shrink-0 place-items-center rounded-full text-[11px] font-extrabold text-white"
+                style={{ background: user.avatarColor }}
+              >
+                {user.displayName.charAt(0).toUpperCase()}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold text-text">{user.displayName}</p>
+                <p className="truncate text-[11px] text-text-muted">{user.email}</p>
+              </div>
+            </div>
+          )}
           <Link
             href="/"
             className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-text-muted hover:bg-bg-elev hover:text-text"
           >
             ← Quay lại sàn
           </Link>
+          <button
+            onClick={logout}
+            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-text-muted hover:bg-danger/10 hover:text-danger"
+          >
+            <LogOut className="size-4" />
+            Đăng xuất
+          </button>
         </div>
       </aside>
 

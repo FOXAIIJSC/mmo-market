@@ -27,6 +27,7 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<Coupon> Coupons => Set<Coupon>();
     public DbSet<CouponUsage> CouponUsages => Set<CouponUsage>();
+    public DbSet<SellerCoupon> SellerCoupons => Set<SellerCoupon>();
     public DbSet<Banner> Banners => Set<Banner>();
     public DbSet<FlashSale> FlashSales => Set<FlashSale>();
     public DbSet<SiteConfig> SiteConfigs => Set<SiteConfig>();
@@ -140,6 +141,15 @@ public class AppDbContext : DbContext, IAppDbContext
         {
             e.HasIndex(x => new { x.CouponId, x.UserId }).IsUnique();
             e.HasOne(x => x.Coupon).WithMany(c => c.Usages).HasForeignKey(x => x.CouponId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<SellerCoupon>(e =>
+        {
+            e.HasIndex(x => new { x.SellerId, x.Code }).IsUnique();
+            e.Property(x => x.Value).HasColumnType("decimal(18,2)");
+            e.Property(x => x.MinOrderAmount).HasColumnType("decimal(18,2)");
+            e.Property(x => x.MaxDiscount).HasColumnType("decimal(18,2)");
+            e.HasOne(x => x.Seller).WithMany().HasForeignKey(x => x.SellerId).OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<Banner>(e =>

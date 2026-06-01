@@ -52,6 +52,31 @@ public class SellerController : ControllerBase
         return Ok(new { added });
     }
 
+    [HttpGet("coupons")]
+    public Task<SellerCouponDto[]> Coupons(CancellationToken ct) => _svc.ListMyCouponsAsync(Uid, ct);
+
+    [HttpPost("coupons")]
+    public Task<SellerCouponDto> CreateCoupon([FromBody] CreateSellerCouponDto dto, CancellationToken ct) =>
+        _svc.CreateSellerCouponAsync(Uid, dto, ct);
+
+    [HttpPut("coupons/{id:guid}")]
+    public Task<SellerCouponDto> UpdateCoupon(Guid id, [FromBody] UpdateSellerCouponDto dto, CancellationToken ct) =>
+        _svc.UpdateSellerCouponAsync(Uid, id, dto, ct);
+
+    [HttpDelete("coupons/{id:guid}")]
+    public async Task<IActionResult> DeleteCoupon(Guid id, CancellationToken ct)
+    {
+        await _svc.DeleteSellerCouponAsync(Uid, id, ct);
+        return NoContent();
+    }
+
+    [HttpPost("coupons/{id:guid}/toggle")]
+    public Task<SellerCouponDto> ToggleCoupon(Guid id, CancellationToken ct) =>
+        _svc.ToggleSellerCouponAsync(Uid, id, ct);
+
+    [HttpGet("reviews")]
+    public Task<SellerReviewDto[]> Reviews(CancellationToken ct) => _svc.ListMyReviewsAsync(Uid, ct);
+
     [HttpGet("withdraws")]
     public Task<WithdrawDto[]> Withdraws(CancellationToken ct) => _svc.ListMyWithdrawsAsync(Uid, ct);
 
