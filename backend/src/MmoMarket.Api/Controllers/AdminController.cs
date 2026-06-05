@@ -22,6 +22,9 @@ public class AdminController : ControllerBase
     [HttpGet("metrics")]
     public Task<AdminMetricsDto> Metrics(CancellationToken ct) => _svc.GetMetricsAsync(ct);
 
+    [HttpGet("finance/reconciliation")]
+    public Task<FinanceReconciliationDto> FinanceReconciliation(CancellationToken ct) => _svc.GetFinanceReconciliationAsync(ct);
+
     [HttpGet("reports")]
     public Task<AdminReportDto> Reports(CancellationToken ct) => _svc.GetReportsAsync(ct);
 
@@ -52,6 +55,9 @@ public class AdminController : ControllerBase
     public record AdminRejectDto(string? Reason);
     [HttpPost("products/{id:guid}/reject")]
     public Task<AdminProductDto> RejectProduct(Guid id, [FromBody] AdminRejectDto dto, CancellationToken ct) => _svc.RejectProductAsync(id, dto.Reason ?? "", ct);
+
+    [HttpPost("products/{id:guid}/ban")]
+    public Task<AdminProductDto> BanProduct(Guid id, [FromBody] AdminRejectDto dto, CancellationToken ct) => _svc.BanProductAsync(id, dto.Reason ?? "", ct);
 
     [HttpGet("kyc/pending")]
     public Task<KycDto[]> KycPending(CancellationToken ct) => _kyc.ListPendingAsync(ct);
@@ -130,6 +136,25 @@ public class AdminController : ControllerBase
     [HttpPut("config/fee")]
     public Task<FeeConfigDto> SetFee([FromBody] SetFeeRequest dto, CancellationToken ct) =>
         _svc.SetFeeRateAsync(dto.FeePercent, ct);
+
+    // Phí theo danh mục + ngưỡng giá (P1.1)
+    [HttpGet("config/fee-tiers")]
+    public Task<FeeTierDto[]> FeeTiers(CancellationToken ct) => _svc.ListFeeTiersAsync(ct);
+
+    [HttpPost("config/fee-tiers")]
+    public Task<FeeTierDto> CreateFeeTier([FromBody] FeeTierUpsertDto dto, CancellationToken ct) =>
+        _svc.CreateFeeTierAsync(dto, ct);
+
+    [HttpPut("config/fee-tiers/{id:guid}")]
+    public Task<FeeTierDto> UpdateFeeTier(Guid id, [FromBody] FeeTierUpsertDto dto, CancellationToken ct) =>
+        _svc.UpdateFeeTierAsync(id, dto, ct);
+
+    [HttpDelete("config/fee-tiers/{id:guid}")]
+    public async Task<IActionResult> DeleteFeeTier(Guid id, CancellationToken ct)
+    {
+        await _svc.DeleteFeeTierAsync(id, ct);
+        return NoContent();
+    }
 
     [HttpGet("config/loyalty")]
     public Task<LoyaltyConfigDto> GetLoyaltyConfig(CancellationToken ct) => _svc.GetLoyaltyConfigAsync(ct);

@@ -49,7 +49,9 @@ export default async function SellersPage() {
                       {s.rating.toFixed(2)}
                     </span>
                     <span>{formatNumber(s.totalSold)} đã bán</span>
-                    <span>{s.responseTime}</span>
+                    {typeof s.trustScore === "number" && (
+                      <span className="flex items-center gap-1 text-success">🛡 {s.trustScore}/100</span>
+                    )}
                   </div>
                 </div>
               </div>

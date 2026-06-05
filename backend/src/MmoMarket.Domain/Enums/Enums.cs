@@ -19,13 +19,13 @@ public enum DeliveryMethod
 public enum OrderStatus
 {
     PendingPayment = 0,
-    Paid = 1,
-    Processing = 2,
-    Delivered = 3,
-    Completed = 4,
-    Dispute = 5,
-    Refunded = 6,
-    Cancelled = 7
+    EscrowLocked   = 1, // tiền đã vào escrow, chờ seller bàn giao (trước đây: Paid)
+    Delivering     = 2, // seller đang bàn giao (trước đây: Processing)
+    Checking       = 3, // đã giao, buyer kiểm tra trong cửa sổ bảo hành (trước đây: Delivered)
+    Completed      = 4,
+    Disputed       = 5, // (trước đây: Dispute)
+    Refunded       = 6,
+    Cancelled      = 7
 }
 
 public enum PaymentMethod
@@ -54,7 +54,17 @@ public enum WalletTxnType
     Refund = 2,
     Withdraw = 3,
     Commission = 4,
-    Bonus = 5
+    Bonus = 5,
+    Deposit = 6,        // cọc đăng tin bị khóa (P1.4)
+    DepositRefund = 7   // hoàn cọc đăng tin
+}
+
+public enum ListingDepositStatus
+{
+    None = 0,
+    Held = 1,       // đang khóa cọc
+    Refunded = 2,   // đã hoàn cọc (gỡ tin sạch)
+    Forfeited = 3   // tịch thu cọc (seller bùng hàng)
 }
 
 public enum WalletTxnStatus
@@ -79,7 +89,8 @@ public enum ProductStatus
     Active = 2,
     Rejected = 3,
     Hidden = 4,
-    OutOfStock = 5
+    OutOfStock = 5,
+    Banned = 6 // vi phạm, khóa vĩnh viễn
 }
 
 public enum CouponType

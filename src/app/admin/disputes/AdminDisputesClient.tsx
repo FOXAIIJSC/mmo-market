@@ -33,6 +33,7 @@ export function AdminDisputesClient() {
   const [reply, setReply] = useState("");
   const [resolution, setResolution] = useState("");
   const [action, setAction] = useState("release_seller");
+  const [refundPercent, setRefundPercent] = useState(50);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -94,7 +95,7 @@ export function AdminDisputesClient() {
       await apiFetch(`/api/admin/disputes/${active.id}/resolve`, {
         method: "POST",
         token,
-        body: JSON.stringify({ resolution, action }),
+        body: JSON.stringify({ resolution, action, refundPercent: action === "partial_refund" ? refundPercent : null }),
       });
       setActive(null);
       setResolution("");
@@ -237,8 +238,19 @@ export function AdminDisputesClient() {
                     >
                       <option value="release_seller">Giải phóng cho seller (escrow → seller)</option>
                       <option value="refund_buyer">Hoàn tiền 100% cho buyer</option>
-                      <option value="partial_refund">Hoàn tiền một phần (50/50)</option>
+                      <option value="partial_refund">Hoàn tiền một phần (theo %)</option>
                     </select>
+                    {action === "partial_refund" && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <label className="text-xs text-text-muted">% hoàn cho buyer</label>
+                        <input
+                          type="number" min={0} max={100} value={refundPercent}
+                          onChange={(e) => setRefundPercent(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+                          className="h-8 w-20 rounded-lg border border-border bg-bg-card px-2 text-right text-sm text-text outline-none focus:border-brand"
+                        />
+                        <span className="text-xs text-text-muted">%</span>
+                      </div>
+                    )}
                     <textarea
                       rows={2}
                       placeholder="Kết luận của admin (sẽ public)"

@@ -82,6 +82,7 @@ function mapSeller(s: ApiSellerSummary): Seller {
     totalSold: s.totalSold,
     badge: (s.badge as Seller["badge"]) || undefined,
     kycStatus: (kyc === "approved" || kyc === "pending" || kyc === "rejected" ? kyc : "approved") as Seller["kycStatus"],
+    trustScore: s.trustScore,
   };
 }
 

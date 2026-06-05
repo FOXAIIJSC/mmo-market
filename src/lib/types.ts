@@ -14,11 +14,11 @@ export type DeliveryMethod = "auto" | "manual" | "hybrid";
 
 export type OrderStatus =
   | "PENDING_PAYMENT"
-  | "PAID"
-  | "PROCESSING"
-  | "DELIVERED"
+  | "ESCROW_LOCKED"
+  | "DELIVERING"
+  | "CHECKING"
   | "COMPLETED"
-  | "DISPUTE"
+  | "DISPUTED"
   | "REFUNDED"
   | "CANCELLED";
 
@@ -56,6 +56,7 @@ export interface Seller {
   bio?: string;
   responseTime?: string;
   kycStatus: "pending" | "approved" | "rejected";
+  trustScore?: number;
 }
 
 export interface Product {

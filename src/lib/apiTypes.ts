@@ -18,6 +18,7 @@ export type ApiSellerSummary = {
   totalSold: number;
   badge?: string | null;
   kycStatus: string;
+  trustScore: number;
 };
 
 export type ApiProductListItem = {
@@ -121,6 +122,7 @@ export type ApiOrder = {
   total: number;
   createdAt: string;
   paidAt?: string | null;
+  deliverDueAt?: string | null;
   deliveredAt?: string | null;
   escrowReleaseAt?: string | null;
   completedAt?: string | null;
@@ -199,6 +201,8 @@ export type ApiSellerProduct = {
   inventoryAvailable: number;
   inventoryReserved: number;
   inventorySold: number;
+  depositAmount: number;
+  depositStatus: string; // None | Held | Refunded | Forfeited
 };
 
 export type ApiSellerOrderLine = {
@@ -260,6 +264,7 @@ export type ApiSellerDashboard = {
   openDisputes: number;
   pendingWithdrawals: number;
   availableBalance: number;
+  trustScore: number;
 };
 
 export type ApiAdminOrderLine = {
@@ -384,6 +389,19 @@ export type ApiKycSubmission = {
   phoneNumber: string;
   createdAt: string;
   rejectionReason?: string | null;
+  frontImage?: string | null;
+  backImage?: string | null;
+};
+
+export type ApiFinanceReconciliation = {
+  platformRevenue: number;
+  escrowHeld: number;
+  totalRefunded: number;
+  depositsHeld: number;
+  depositsForfeited: number;
+  totalTopup: number;
+  totalWithdrawn: number;
+  userWalletTotal: number;
 };
 
 export type ApiDisputeMessage = {
@@ -616,4 +634,37 @@ export type ApiFlashSale = {
   status: "Draft" | "Active" | "Ended";
   productCount: number;
   createdAt: string;
+};
+
+// ── P1: Gói thành viên Seller & phí theo danh mục ──────────────────────────
+export type ApiSellerPlan = {
+  code: string;
+  name: string;
+  pricePerMonth: number;
+  feeDiscountPercent: number;
+  maxListings: number;       // -1 = không giới hạn
+  boostsPerMonth: number;
+  badge?: string | null;
+  position: number;
+  isActive: boolean;
+};
+
+export type ApiCurrentPlan = {
+  code: string;
+  name: string;
+  feeDiscountPercent: number;
+  maxListings: number;
+  boostsPerMonth: number;
+  badge?: string | null;
+  expiresAt?: string | null;
+  active: boolean;
+};
+
+export type ApiFeeTier = {
+  id: string;
+  categorySlug: string;
+  minPrice: number;
+  maxPrice?: number | null;
+  sellerFeePercent: number;
+  note?: string | null;
 };

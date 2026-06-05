@@ -58,6 +58,12 @@ public record SystemSettingsDto(
     string[] EnabledPayments);
 
 public record FeeConfigDto(decimal FeePercent);
+public record FinanceReconciliationDto(
+    decimal PlatformRevenue, decimal EscrowHeld, decimal TotalRefunded,
+    decimal DepositsHeld, decimal DepositsForfeited,
+    decimal TotalTopup, decimal TotalWithdrawn, decimal UserWalletTotal);
+public record FeeTierDto(Guid Id, string CategorySlug, decimal MinPrice, decimal? MaxPrice, decimal SellerFeePercent, string? Note);
+public record FeeTierUpsertDto(string? CategorySlug, decimal MinPrice, decimal? MaxPrice, decimal SellerFeePercent, string? Note);
 public record LoyaltyConfigDto(int PtsPer1000, int SignupBonus, int ReviewBonus, int ReferralBonus, int TierSilver, int TierGold, int TierDiamond);
 public record LoyaltyRewardDto(Guid Id, string Title, string Description, int PointsCost, string Type, decimal VoucherAmount, bool IsActive, bool IsComingSoon, int Position, DateTime CreatedAt);
 public record CreateLoyaltyRewardDto(string Title, string Description, int PointsCost, string Type, decimal VoucherAmount, bool IsComingSoon, int Position);
@@ -75,15 +81,22 @@ public class AdminService
 {
     private readonly IAppDbContext _db;
     private readonly ConfigService _config;
-    public AdminService(IAppDbContext db, ConfigService config) { _db = db; _config = config; }
+    private readonly Sellers.TrustScoreService _trust;
+    public AdminService(IAppDbContext db, ConfigService config, Sellers.TrustScoreService trust)
+    { _db = db; _config = config; _trust = trust; }
 
     public async Task<AdminMetricsDto> GetMetricsAsync(CancellationToken ct)
     {
         var since = DateTime.UtcNow.AddDays(-30);
         var gmvTotals = await _db.Orders.Where(o => o.CreatedAt >= since && o.Status != OrderStatus.Cancelled).Select(o => o.Total).ToListAsync(ct);
         var gmv = gmvTotals.Sum();
-        var feeRate = await _config.GetDecimalAsync(ConfigKeys.FeeRate, 0.05m, ct);
-        var revenue = gmv * feeRate;
+        // Doanh thu = tổng phí sàn thực thu (Order.Fee đã khóa theo danh mục + gói), bỏ đơn hủy/hoàn/chưa thanh toán.
+        var revenueFees = await _db.Orders
+            .Where(o => o.CreatedAt >= since
+                && o.Status != OrderStatus.Cancelled && o.Status != OrderStatus.Refunded && o.Status != OrderStatus.PendingPayment)
+            .Select(o => o.Fee)
+            .ToListAsync(ct);
+        var revenue = revenueFees.Sum();
         var ordersCompleted = await _db.Orders.CountAsync(o => o.Status == OrderStatus.Completed, ct);
         var newUsers = await _db.Users.CountAsync(u => u.CreatedAt >= since, ct);
         var kyc = await _db.KycSubmissions.CountAsync(k => k.Status == KycStatus.Pending, ct);
@@ -91,6 +104,35 @@ public class AdminService
         var disputes = await _db.Disputes.CountAsync(d => d.Status == DisputeStatus.Open || d.Status == DisputeStatus.Investigating, ct);
         var pendingWd = await _db.WithdrawRequests.CountAsync(w => w.Status == WithdrawStatus.Pending, ct);
         return new AdminMetricsDto(gmv, revenue, ordersCompleted, newUsers, kyc, pending, disputes, pendingWd);
+    }
+
+    // Báo cáo đối soát dòng tiền (P2.5) — ledger đơn + tài khoản logic Platform/Reserve/Escrow.
+    public async Task<FinanceReconciliationDto> GetFinanceReconciliationAsync(CancellationToken ct)
+    {
+        var platformRevenue = (await _db.Orders
+            .Where(o => o.Status != OrderStatus.Cancelled && o.Status != OrderStatus.Refunded && o.Status != OrderStatus.PendingPayment)
+            .Select(o => o.Fee).ToListAsync(ct)).Sum();
+        var escrowHeld = (await _db.Orders
+            .Where(o => o.Status == OrderStatus.EscrowLocked || o.Status == OrderStatus.Delivering || o.Status == OrderStatus.Checking)
+            .Select(o => o.Total).ToListAsync(ct)).Sum();
+        var totalRefunded = (await _db.WalletTxns
+            .Where(t => t.Type == WalletTxnType.Refund && t.Status == WalletTxnStatus.Completed)
+            .Select(t => t.Amount).ToListAsync(ct)).Sum();
+        var depositsHeld = (await _db.Products
+            .Where(p => p.DepositStatus == ListingDepositStatus.Held)
+            .Select(p => p.DepositAmount).ToListAsync(ct)).Sum();
+        var depositsForfeited = (await _db.Products
+            .Where(p => p.DepositStatus == ListingDepositStatus.Forfeited)
+            .Select(p => p.DepositAmount).ToListAsync(ct)).Sum();
+        var totalTopup = (await _db.WalletTxns
+            .Where(t => t.Type == WalletTxnType.Topup && t.Status == WalletTxnStatus.Completed)
+            .Select(t => t.Amount).ToListAsync(ct)).Sum();
+        var totalWithdrawn = (await _db.WithdrawRequests
+            .Where(w => w.Status == WithdrawStatus.Approved || w.Status == WithdrawStatus.Paid)
+            .Select(w => w.Amount).ToListAsync(ct)).Sum();
+        var userWalletTotal = (await _db.Users.Select(u => u.WalletBalance).ToListAsync(ct)).Sum();
+        return new FinanceReconciliationDto(platformRevenue, escrowHeld, totalRefunded,
+            depositsHeld, depositsForfeited, totalTopup, totalWithdrawn, userWalletTotal);
     }
 
     public async Task<AdminUserDto[]> ListUsersAsync(string? role, string? search, CancellationToken ct)
@@ -148,6 +190,23 @@ public class AdminService
             ?? throw new AppException("Không tìm thấy sản phẩm", 404);
         product.Status = ProductStatus.Rejected;
         product.Description = string.IsNullOrEmpty(reason) ? product.Description : $"[REJECTED: {reason}]\n{product.Description}";
+        await _db.SaveChangesAsync(ct);
+        return new AdminProductDto(product.Id, product.Slug, product.Title, product.CategorySlug, product.Price, product.Stock, product.Sold, product.Rating, product.Status.ToString(), product.Seller?.Username ?? "", product.CreatedAt);
+    }
+
+    // Khóa vĩnh viễn sản phẩm vi phạm + trừ trust score seller (P2.6 + P2.1)
+    public async Task<AdminProductDto> BanProductAsync(Guid productId, string reason, CancellationToken ct)
+    {
+        var product = await _db.Products.Include(p => p.Seller).FirstOrDefaultAsync(p => p.Id == productId, ct)
+            ?? throw new AppException("Không tìm thấy sản phẩm", 404);
+        product.Status = ProductStatus.Banned;
+        product.Description = string.IsNullOrEmpty(reason) ? product.Description : $"[BANNED: {reason}]\n{product.Description}";
+        _db.AuditLogs.Add(new AuditLog
+        {
+            ActorRole = "Admin", Action = "product_ban", EntityType = "Product", EntityId = product.Slug,
+            Detail = $"Khóa vĩnh viễn sản phẩm {product.Title}. Lý do: {reason}",
+        });
+        await _trust.OnViolationAsync(product.SellerId, ct);
         await _db.SaveChangesAsync(ct);
         return new AdminProductDto(product.Id, product.Slug, product.Title, product.CategorySlug, product.Price, product.Stock, product.Sold, product.Rating, product.Status.ToString(), product.Seller?.Username ?? "", product.CreatedAt);
     }
@@ -301,7 +360,7 @@ public class AdminService
         if (status == OrderStatus.Cancelled || status == OrderStatus.Refunded)
         {
             // Refund to wallet if paid via wallet
-            if (order.Buyer != null && prev >= OrderStatus.Paid && order.PaymentMethod == PaymentMethod.Wallet)
+            if (order.Buyer != null && prev >= OrderStatus.EscrowLocked && order.PaymentMethod == PaymentMethod.Wallet)
             {
                 order.Buyer.WalletBalance += order.Total;
                 _db.WalletTxns.Add(new WalletTxn
@@ -335,8 +394,10 @@ public class AdminService
         // Orders
         var orders = await _db.Orders.Include(o => o.Buyer).Include(o => o.Lines).ToListAsync(ct);
         var totalGmv       = orders.Where(o => o.Status != OrderStatus.Cancelled).Sum(o => o.Total);
-        var reportFeeRate  = await _config.GetDecimalAsync(ConfigKeys.FeeRate, 0.05m, ct);
-        var totalRevenue   = totalGmv * reportFeeRate;
+        // Doanh thu = tổng phí sàn thực thu (Order.Fee theo danh mục + gói), bỏ đơn hủy/hoàn/chưa thanh toán.
+        var totalRevenue   = orders
+            .Where(o => o.Status != OrderStatus.Cancelled && o.Status != OrderStatus.Refunded && o.Status != OrderStatus.PendingPayment)
+            .Sum(o => o.Fee);
         var orderByStatus  = orders.GroupBy(o => o.Status.ToString())
             .Select(g => new KvInt(g.Key, g.Count())).ToArray();
         var orderByPayment = orders.GroupBy(o => o.PaymentMethod.ToString())
@@ -348,7 +409,7 @@ public class AdminService
 
         // Top buyers (by spend)
         var topBuyers = orders
-            .Where(o => o.Status == OrderStatus.Completed || o.Status == OrderStatus.Delivered)
+            .Where(o => o.Status == OrderStatus.Completed || o.Status == OrderStatus.Checking)
             .GroupBy(o => new { o.BuyerId, Username = o.Buyer?.Username ?? "", AvatarColor = o.Buyer?.AvatarColor ?? "#7c3aed" })
             .Select(g => new TopUserDto(g.Key.Username, g.Key.AvatarColor, g.Sum(o => o.Total), g.Count()))
             .OrderByDescending(x => x.Total)
@@ -520,6 +581,52 @@ public class AdminService
         await _config.SetAsync(ConfigKeys.FeeRate, rate.ToString("F4", System.Globalization.CultureInfo.InvariantCulture), ct);
         return new FeeConfigDto(percent);
     }
+
+    // ── Fee config theo danh mục (P1.1) ───────────────────────────────────────
+    public async Task<FeeTierDto[]> ListFeeTiersAsync(CancellationToken ct)
+    {
+        var list = await _db.FeeConfigs.OrderBy(f => f.CategorySlug).ThenBy(f => f.MinPrice).ToListAsync(ct);
+        return list.Select(MapFeeTier).ToArray();
+    }
+
+    public async Task<FeeTierDto> CreateFeeTierAsync(FeeTierUpsertDto dto, CancellationToken ct)
+    {
+        var fc = new FeeConfig
+        {
+            CategorySlug = (dto.CategorySlug ?? "").Trim(),
+            MinPrice = Math.Max(0m, dto.MinPrice),
+            MaxPrice = dto.MaxPrice,
+            SellerFeePercent = Math.Clamp(dto.SellerFeePercent, 0m, 50m),
+            Note = dto.Note,
+        };
+        _db.FeeConfigs.Add(fc);
+        await _db.SaveChangesAsync(ct);
+        return MapFeeTier(fc);
+    }
+
+    public async Task<FeeTierDto> UpdateFeeTierAsync(Guid id, FeeTierUpsertDto dto, CancellationToken ct)
+    {
+        var fc = await _db.FeeConfigs.FirstOrDefaultAsync(f => f.Id == id, ct)
+            ?? throw new AppException("Không tìm thấy cấu hình phí", 404);
+        fc.CategorySlug = (dto.CategorySlug ?? "").Trim();
+        fc.MinPrice = Math.Max(0m, dto.MinPrice);
+        fc.MaxPrice = dto.MaxPrice;
+        fc.SellerFeePercent = Math.Clamp(dto.SellerFeePercent, 0m, 50m);
+        fc.Note = dto.Note;
+        await _db.SaveChangesAsync(ct);
+        return MapFeeTier(fc);
+    }
+
+    public async Task DeleteFeeTierAsync(Guid id, CancellationToken ct)
+    {
+        var fc = await _db.FeeConfigs.FirstOrDefaultAsync(f => f.Id == id, ct)
+            ?? throw new AppException("Không tìm thấy cấu hình phí", 404);
+        _db.FeeConfigs.Remove(fc);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    private static FeeTierDto MapFeeTier(FeeConfig f) =>
+        new(f.Id, f.CategorySlug, f.MinPrice, f.MaxPrice, f.SellerFeePercent, f.Note);
 
     public async Task<LoyaltyConfigDto> GetLoyaltyConfigAsync(CancellationToken ct)
     {

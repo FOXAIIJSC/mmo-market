@@ -16,19 +16,19 @@ type DisputeTarget = { orderId: string; orderCode: string };
 const tabs = [
   { v: "", label: "Tất cả" },
   { v: "PendingPayment", label: "Chờ thanh toán" },
-  { v: "Processing", label: "Đang xử lý" },
-  { v: "Delivered", label: "Đã giao" },
+  { v: "Delivering", label: "Đang bàn giao" },
+  { v: "Checking", label: "Đang kiểm tra" },
   { v: "Completed", label: "Hoàn thành" },
-  { v: "Dispute", label: "Tranh chấp" },
+  { v: "Disputed", label: "Tranh chấp" },
 ];
 
 const apiToFrontStatus: Record<string, OrderStatus> = {
   PendingPayment: "PENDING_PAYMENT",
-  Paid: "PAID",
-  Processing: "PROCESSING",
-  Delivered: "DELIVERED",
+  EscrowLocked: "ESCROW_LOCKED",
+  Delivering: "DELIVERING",
+  Checking: "CHECKING",
   Completed: "COMPLETED",
-  Dispute: "DISPUTE",
+  Disputed: "DISPUTED",
   Refunded: "REFUNDED",
   Cancelled: "CANCELLED",
 };
@@ -178,7 +178,7 @@ export function OrdersClient() {
                   <OrderStatusBadge status={feStatus} />
                   <span className="text-text-dim">|</span>
                   <span className="text-text-muted">Đặt {formatRelativeTime(o.createdAt)}</span>
-                  {(o.status === "Paid" || o.status === "Delivered") && o.escrowReleaseAt && (
+                  {(o.status === "EscrowLocked" || o.status === "Checking") && o.escrowReleaseAt && (
                     <span className="rounded-md bg-warning/10 px-2 py-0.5 text-[11px] text-warning">
                       🔒 Escrow đến {new Date(o.escrowReleaseAt).toLocaleString("vi-VN")}
                     </span>
@@ -209,7 +209,7 @@ export function OrdersClient() {
                       <div className="text-xs text-text-muted">{o.paymentMethod}</div>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {o.status === "Delivered" && (
+                      {o.status === "Checking" && (
                         <Button variant="success" size="sm" disabled={busy === o.id} onClick={() => confirm(o.id)} leftIcon={busy === o.id ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}>
                           Xác nhận đã nhận
                         </Button>
@@ -219,13 +219,13 @@ export function OrdersClient() {
                           {busy === o.id ? "Đang xử lý..." : "Thanh toán ngay"}
                         </Button>
                       )}
-                      {(o.status === "Completed" || o.status === "Delivered") && o.lines[0] && (
+                      {(o.status === "Completed" || o.status === "Checking") && o.lines[0] && (
                         <Button variant="soft" size="sm" leftIcon={<Star className="size-3.5" />} onClick={() => setReviewTarget({ orderId: o.id, line: o.lines[0] })}>Đánh giá</Button>
                       )}
-                      {(o.status === "Delivered" || o.status === "Completed") && (
+                      {(o.status === "Checking" || o.status === "Completed") && (
                         <Button variant="outline" size="sm" leftIcon={<AlertTriangle className="size-3.5" />} onClick={() => setDisputeTarget({ orderId: o.id, orderCode: o.code })}>Mở khiếu nại</Button>
                       )}
-                      {o.status === "Dispute" && (
+                      {o.status === "Disputed" && (
                         <Link href="/account/disputes">
                           <Button variant="outline" size="sm" leftIcon={<AlertTriangle className="size-3.5" />}>Đang khiếu nại</Button>
                         </Link>

@@ -23,6 +23,7 @@ public record OrderDto(
     decimal Total,
     DateTime CreatedAt,
     DateTime? PaidAt,
+    DateTime? DeliverDueAt,
     DateTime? DeliveredAt,
     DateTime? EscrowReleaseAt,
     DateTime? CompletedAt,
@@ -34,8 +35,10 @@ public class OrderService
     private readonly CouponService _coupon;
     private readonly ConfigService _config;
     private readonly TotpService _totp;
-    public OrderService(IAppDbContext db, CouponService coupon, ConfigService config, TotpService totp)
-    { _db = db; _coupon = coupon; _config = config; _totp = totp; }
+    private readonly Fees.FeeService _fee;
+    private readonly Sellers.TrustScoreService _trust;
+    public OrderService(IAppDbContext db, CouponService coupon, ConfigService config, TotpService totp, Fees.FeeService fee, Sellers.TrustScoreService trust)
+    { _db = db; _coupon = coupon; _config = config; _totp = totp; _fee = fee; _trust = trust; }
 
     public async Task<OrderDto> CheckoutAsync(Guid userId, CheckoutDto dto, CancellationToken ct)
     {
@@ -78,7 +81,7 @@ public class OrderService
         {
             Code = "MMK-" + DateTime.UtcNow.Ticks.ToString()[^7..],
             BuyerId = userId,
-            Status = method == PaymentMethod.Wallet ? OrderStatus.Paid : OrderStatus.PendingPayment,
+            Status = method == PaymentMethod.Wallet ? OrderStatus.EscrowLocked : OrderStatus.PendingPayment,
             PaymentMethod = method,
             Subtotal = subtotal,
             Discount = discount,
@@ -116,6 +119,8 @@ public class OrderService
                 Note = $"Thanh toán đơn {order.Code}",
                 OrderId = order.Id,
             });
+            AddAudit(userId, "Buyer", "wallet_purchase", "Order", order.Code, total,
+                $"Thanh toán đơn {order.Code} bằng ví, lock vào escrow");
             await ProcessPaidOrderAsync(order, ct);
         }
 
@@ -133,7 +138,7 @@ public class OrderService
         var order = await _db.Orders.Include(o => o.Lines).FirstOrDefaultAsync(o => o.Id == orderId && o.BuyerId == userId, ct)
             ?? throw new AppException("Không tìm thấy đơn", 404);
         if (order.Status != OrderStatus.PendingPayment) throw new AppException("Đơn không cần thanh toán");
-        order.Status = OrderStatus.Paid;
+        order.Status = OrderStatus.EscrowLocked;
         order.PaidAt = DateTime.UtcNow;
         await ProcessPaidOrderAsync(order, ct);
         await _db.SaveChangesAsync(ct);
@@ -152,22 +157,30 @@ public class OrderService
                     new { account = fakeAccount, password = Guid.NewGuid().ToString("N")[..10], note = "Vui lòng đổi mật khẩu trong 24h." }
                 });
             }
-            order.Status = OrderStatus.Delivered;
+            // Bàn giao tự động ngay → vào cửa sổ kiểm tra của buyer (Checking).
+            order.Status = OrderStatus.Checking;
             order.DeliveredAt = DateTime.UtcNow;
-            order.EscrowReleaseAt = DateTime.UtcNow.AddDays(3);
+            order.EscrowReleaseAt = await GetEscrowReleaseAtAsync(ct);
         }
         else
         {
-            order.Status = OrderStatus.Processing;
+            // Bàn giao thủ công → chờ seller giao trong cửa sổ T+N giờ (auto-cancel nếu trễ).
+            order.Status = OrderStatus.Delivering;
+            order.DeliverDueAt = await GetDeliverDueAtAsync(ct);
         }
-        // Update sold counters & loyalty
+        // Update sold counters, loyalty & tính phí sàn (khóa tại thời điểm thanh toán)
         foreach (var line in order.Lines)
         {
             var product = await _db.Products.FirstOrDefaultAsync(p => p.Id == line.ProductId, ct);
             if (product != null) product.Sold += line.Quantity;
             var seller = await _db.Sellers.FirstOrDefaultAsync(s => s.Id == line.SellerId, ct);
             if (seller != null) seller.TotalSold += line.Quantity;
+
+            var categorySlug = product?.CategorySlug ?? "";
+            var rate = await _fee.GetEffectiveRateAsync(categorySlug, line.UnitPrice, line.SellerId, ct);
+            line.FeeAmount = Math.Round(line.UnitPrice * line.Quantity * rate, 0, MidpointRounding.AwayFromZero);
         }
+        order.Fee = order.Lines.Sum(l => l.FeeAmount);
         var buyer = await _db.Users.FirstOrDefaultAsync(u => u.Id == order.BuyerId, ct);
         if (buyer != null)
         {
@@ -205,8 +218,10 @@ public class OrderService
         if (order == null) return false;
         if (order.Status != OrderStatus.PendingPayment) return true; // already confirmed
 
-        order.Status = OrderStatus.Paid;
+        order.Status = OrderStatus.EscrowLocked;
         order.PaidAt = DateTime.UtcNow;
+        AddAudit(order.BuyerId, "Buyer", "external_payment_confirmed", "Order", order.Code, order.Total,
+            $"Xác nhận thanh toán ngoài ({order.PaymentMethod}) cho đơn {order.Code}");
         await ProcessPaidOrderAsync(order, ct);
         await _db.SaveChangesAsync(ct);
         return true;
@@ -225,8 +240,10 @@ public class OrderService
                 && o.PaymentMethod == PaymentMethod.VietQr, ct);
         if (order == null) return false;
 
-        order.Status = OrderStatus.Paid;
+        order.Status = OrderStatus.EscrowLocked;
         order.PaidAt = DateTime.UtcNow;
+        AddAudit(order.BuyerId, "Buyer", "external_payment_confirmed", "Order", order.Code, order.Total,
+            $"Xác nhận chuyển khoản (VietQR) cho đơn {order.Code}");
         await ProcessPaidOrderAsync(order, ct);
         await _db.SaveChangesAsync(ct);
         return true;
@@ -236,17 +253,118 @@ public class OrderService
     {
         var order = await _db.Orders.Include(o => o.Lines).FirstOrDefaultAsync(o => o.Id == id && o.BuyerId == userId, ct)
             ?? throw new AppException("Không tìm thấy đơn", 404);
-        if (order.Status != OrderStatus.Delivered) throw new AppException("Chỉ xác nhận đơn đã giao");
+        if (order.Status != OrderStatus.Checking) throw new AppException("Chỉ xác nhận đơn đã giao đang chờ kiểm tra");
         order.Status = OrderStatus.Completed;
         order.CompletedAt = DateTime.UtcNow;
+        AddAudit(userId, "Buyer", "buyer_confirm_received", "Order", order.Code, order.Total,
+            $"Buyer xác nhận nhận hàng, giải ngân đơn {order.Code}");
+        await _trust.OnOrderCompletedSellersAsync(order.Lines.Select(l => l.SellerId), ct);
         await _db.SaveChangesAsync(ct);
         return Map(order);
+    }
+
+    // ── Background jobs (gọi bởi OrderEscrowWorker) ──────────────────────────────
+
+    /// <summary>Tự động giải ngân các đơn ở Checking đã hết hạn kiểm tra (EscrowReleaseAt &lt;= now).</summary>
+    public async Task<int> AutoReleaseEscrowAsync(CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var due = await _db.Orders
+            .Include(o => o.Lines)
+            .Where(o => o.Status == OrderStatus.Checking && o.EscrowReleaseAt != null && o.EscrowReleaseAt <= now)
+            .ToListAsync(ct);
+        if (due.Count == 0) return 0;
+        foreach (var order in due)
+        {
+            order.Status = OrderStatus.Completed;
+            order.CompletedAt = now;
+            AddAudit(null, "System", "escrow_auto_release", "Order", order.Code, order.Total,
+                $"Tự động giải ngân đơn {order.Code} sau khi hết hạn kiểm tra");
+            await _trust.OnOrderCompletedSellersAsync(order.Lines.Select(l => l.SellerId), ct);
+        }
+        await _db.SaveChangesAsync(ct);
+        return due.Count;
+    }
+
+    /// <summary>Tự động hủy + hoàn 100% các đơn seller không bàn giao đúng hạn (DeliverDueAt &lt;= now).</summary>
+    public async Task<int> AutoCancelStaleAsync(CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var stale = await _db.Orders.Include(o => o.Lines)
+            .Where(o => (o.Status == OrderStatus.EscrowLocked || o.Status == OrderStatus.Delivering)
+                && o.DeliverDueAt != null && o.DeliverDueAt <= now)
+            .ToListAsync(ct);
+        if (stale.Count == 0) return 0;
+        var buyerIds = stale.Select(o => o.BuyerId).Distinct().ToList();
+        var buyers = await _db.Users.Where(u => buyerIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, ct);
+        foreach (var order in stale)
+        {
+            order.Status = OrderStatus.Cancelled;
+            if (buyers.TryGetValue(order.BuyerId, out var buyer))
+            {
+                buyer.WalletBalance += order.Total;
+                _db.WalletTxns.Add(new WalletTxn
+                {
+                    UserId = buyer.Id,
+                    Type = WalletTxnType.Refund,
+                    Amount = order.Total,
+                    Status = WalletTxnStatus.Completed,
+                    Note = $"Hoàn tiền 100% đơn {order.Code} (seller không bàn giao đúng hạn)",
+                    OrderId = order.Id,
+                });
+            }
+            AddAudit(null, "System", "auto_cancel_refund", "Order", order.Code, order.Total,
+                $"Tự động hủy + hoàn 100% đơn {order.Code} do seller trễ bàn giao");
+
+            // Tịch thu cọc đăng tin của sản phẩm liên quan (P1.4)
+            foreach (var line in order.Lines)
+            {
+                var product = await _db.Products.FirstOrDefaultAsync(p => p.Id == line.ProductId, ct);
+                if (product != null && product.DepositStatus == ListingDepositStatus.Held && product.DepositAmount > 0)
+                {
+                    product.DepositStatus = ListingDepositStatus.Forfeited;
+                    AddAudit(null, "System", "listing_deposit_forfeit", "Product", product.Slug, product.DepositAmount,
+                        $"Tịch thu cọc đăng tin {product.Title} do trễ bàn giao đơn {order.Code}");
+                }
+            }
+            // Trừ trust score seller do trễ bàn giao (P2.1)
+            foreach (var sid in order.Lines.Select(l => l.SellerId).Distinct())
+                await _trust.OnLateDeliveryAsync(sid, ct);
+        }
+        await _db.SaveChangesAsync(ct);
+        return stale.Count;
+    }
+
+    private async Task<DateTime> GetEscrowReleaseAtAsync(CancellationToken ct)
+    {
+        var days = await _config.GetIntAsync(ConfigKeys.EscrowReleaseDays, 2, ct); // mặc định 48h
+        return DateTime.UtcNow.AddDays(days);
+    }
+
+    private async Task<DateTime> GetDeliverDueAtAsync(CancellationToken ct)
+    {
+        var hours = await _config.GetIntAsync(ConfigKeys.DeliverWindowHours, 2, ct); // mặc định T+2h
+        return DateTime.UtcNow.AddHours(hours);
+    }
+
+    private void AddAudit(Guid? actorId, string actorRole, string action, string entityType, string? entityId, decimal? amount, string? detail)
+    {
+        _db.AuditLogs.Add(new AuditLog
+        {
+            ActorUserId = actorId,
+            ActorRole = actorRole,
+            Action = action,
+            EntityType = entityType,
+            EntityId = entityId,
+            Amount = amount,
+            Detail = detail,
+        });
     }
 
     public static OrderDto Map(Order o) => new(
         o.Id, o.Code, o.Status.ToString(), o.PaymentMethod.ToString(),
         o.Subtotal, o.Discount, o.Fee, o.Total,
-        o.CreatedAt, o.PaidAt, o.DeliveredAt, o.EscrowReleaseAt, o.CompletedAt,
+        o.CreatedAt, o.PaidAt, o.DeliverDueAt, o.DeliveredAt, o.EscrowReleaseAt, o.CompletedAt,
         o.Lines.Select(l => new OrderLineDto(
             l.Id, l.ProductId, l.Title, l.UnitPrice, l.Quantity, l.Delivery.ToString(),
             string.IsNullOrWhiteSpace(l.DeliveredItemsJson)

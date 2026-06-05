@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MmoMarket.Application.Common;
+using MmoMarket.Application.Config;
+using MmoMarket.Application.Sellers;
 using MmoMarket.Domain.Entities;
 using MmoMarket.Domain.Enums;
 
@@ -7,7 +9,7 @@ namespace MmoMarket.Application.Disputes;
 
 public record DisputeOpenDto(Guid OrderId, string Title, string Body);
 public record DisputeMessageCreateDto(string Body);
-public record DisputeResolveDto(string Resolution, string Action); // Action: refund_buyer | release_seller | partial_refund
+public record DisputeResolveDto(string Resolution, string Action, decimal? RefundPercent = null); // Action: refund_buyer | release_seller | partial_refund
 
 public record DisputeMessageDto(Guid Id, Guid AuthorUserId, string AuthorName, string AuthorRole, string Body, DateTime CreatedAt);
 public record DisputeListItemDto(Guid Id, string Code, Guid OrderId, string OrderCode, string Title, string Status, DateTime CreatedAt, DateTime SlaUntil, string? Resolution);
@@ -16,18 +18,31 @@ public record DisputeDetailDto(Guid Id, string Code, Guid OrderId, string OrderC
 public class DisputeService
 {
     private readonly IAppDbContext _db;
-    public DisputeService(IAppDbContext db) => _db = db;
+    private readonly ConfigService _config;
+    private readonly TrustScoreService _trust;
+    public DisputeService(IAppDbContext db, ConfigService config, TrustScoreService trust)
+    { _db = db; _config = config; _trust = trust; }
 
     public async Task<DisputeDetailDto> OpenAsync(Guid userId, DisputeOpenDto dto, CancellationToken ct)
     {
         var order = await _db.Orders.Include(o => o.Lines).FirstOrDefaultAsync(o => o.Id == dto.OrderId && o.BuyerId == userId, ct)
             ?? throw new AppException("Không tìm thấy đơn", 404);
-        if (order.Status != OrderStatus.Delivered && order.Status != OrderStatus.Processing && order.Status != OrderStatus.Paid)
+        if (order.Status != OrderStatus.Checking && order.Status != OrderStatus.Delivering && order.Status != OrderStatus.EscrowLocked)
             throw new AppException("Chỉ mở tranh chấp với đơn đã giao/đang xử lý");
         if (string.IsNullOrWhiteSpace(dto.Title) || string.IsNullOrWhiteSpace(dto.Body))
             throw new AppException("Vui lòng nhập tiêu đề và nội dung");
         var existing = await _db.Disputes.FirstOrDefaultAsync(d => d.OrderId == dto.OrderId && (d.Status == DisputeStatus.Open || d.Status == DisputeStatus.Investigating), ct);
         if (existing != null) throw new AppException("Đơn đã có tranh chấp đang mở");
+
+        // Chống lạm dụng tranh chấp (P2.3)
+        var maxPerMonth = await _config.GetIntAsync(ConfigKeys.DisputeMaxPerMonth, 3, ct);
+        if (maxPerMonth > 0)
+        {
+            var since = DateTime.UtcNow.AddDays(-30);
+            var recent = await _db.Disputes.CountAsync(d => d.BuyerId == userId && d.CreatedAt >= since, ct);
+            if (recent >= maxPerMonth)
+                throw new AppException($"Bạn đã mở {recent} tranh chấp trong 30 ngày (tối đa {maxPerMonth}). Vui lòng liên hệ hỗ trợ nếu cần.");
+        }
 
         var sellerId = order.Lines.FirstOrDefault()?.SellerId ?? Guid.Empty;
         var dispute = new Dispute
@@ -42,7 +57,7 @@ public class DisputeService
             SlaUntil = DateTime.UtcNow.AddDays(3),
         };
         _db.Disputes.Add(dispute);
-        order.Status = OrderStatus.Dispute;
+        order.Status = OrderStatus.Disputed;
         // hold escrow release
         order.EscrowReleaseAt = null;
         // initial message
@@ -150,25 +165,33 @@ public class DisputeService
                         OrderId = order.Id,
                     });
                     order.Status = OrderStatus.Refunded;
+                    AddAudit(adminUserId, "Admin", "dispute_refund_buyer", "Dispute", dispute.Code, order.Total,
+                        $"Hoàn 100% cho buyer (đơn {order.Code})");
+                    await _trust.OnDisputeLostAsync(dispute.SellerId, ct); // seller thua tranh chấp (P2.1)
                     break;
                 case "release_seller":
                     order.Status = OrderStatus.Completed;
                     order.CompletedAt = DateTime.UtcNow;
+                    AddAudit(adminUserId, "Admin", "dispute_release_seller", "Dispute", dispute.Code, order.Total,
+                        $"Giải ngân cho seller (đơn {order.Code})");
                     break;
                 case "partial_refund":
-                    var half = order.Total / 2m;
-                    buyer.WalletBalance += half;
+                    var pct = Math.Clamp(dto.RefundPercent ?? await _config.GetDecimalAsync(ConfigKeys.PartialRefundDefaultPercent, 50m, ct), 0m, 100m);
+                    var refund = Math.Round(order.Total * pct / 100m, 0, MidpointRounding.AwayFromZero);
+                    buyer.WalletBalance += refund;
                     _db.WalletTxns.Add(new WalletTxn
                     {
                         UserId = buyer.Id,
                         Type = WalletTxnType.Refund,
-                        Amount = half,
+                        Amount = refund,
                         Status = WalletTxnStatus.Completed,
-                        Note = $"Hoàn 50% tranh chấp {dispute.Code} (đơn {order.Code})",
+                        Note = $"Hoàn {pct:0.#}% tranh chấp {dispute.Code} (đơn {order.Code})",
                         OrderId = order.Id,
                     });
                     order.Status = OrderStatus.Completed;
                     order.CompletedAt = DateTime.UtcNow;
+                    AddAudit(adminUserId, "Admin", "dispute_partial_refund", "Dispute", dispute.Code, refund,
+                        $"Hoàn {pct:0.#}% cho buyer + giải ngân phần còn lại (đơn {order.Code})");
                     break;
                 default:
                     throw new AppException("Action không hợp lệ");
@@ -190,4 +213,18 @@ public class DisputeService
     private static DisputeListItemDto MapList(Dispute d) => new(
         d.Id, d.Code, d.OrderId, d.Order?.Code ?? "", d.Title, d.Status.ToString(),
         d.CreatedAt, d.SlaUntil, d.Resolution);
+
+    private void AddAudit(Guid? actorId, string actorRole, string action, string entityType, string? entityId, decimal? amount, string? detail)
+    {
+        _db.AuditLogs.Add(new AuditLog
+        {
+            ActorUserId = actorId,
+            ActorRole = actorRole,
+            Action = action,
+            EntityType = entityType,
+            EntityId = entityId,
+            Amount = amount,
+            Detail = detail,
+        });
+    }
 }

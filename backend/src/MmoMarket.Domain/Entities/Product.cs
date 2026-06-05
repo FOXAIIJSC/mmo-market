@@ -28,6 +28,10 @@ public class Product : Entity
     public string BadgesJson { get; set; } = "[]";
     public ProductStatus Status { get; set; } = ProductStatus.Active;
 
+    // Cọc đăng tin (P1.4)
+    public decimal DepositAmount { get; set; }
+    public ListingDepositStatus DepositStatus { get; set; } = ListingDepositStatus.None;
+
     public List<Review> Reviews { get; set; } = new();
     public List<InventoryItem> InventoryItems { get; set; } = new();
 }

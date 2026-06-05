@@ -22,11 +22,11 @@ function fmtDateTime(iso?: string | null) {
 
 const STATUS_TABS = [
   { key: "",            label: "Tất cả" },
-  { key: "Paid",        label: "Chờ giao" },
-  { key: "Processing",  label: "Đang xử lý" },
-  { key: "Delivered",   label: "Đã giao" },
+  { key: "EscrowLocked", label: "Chờ giao" },
+  { key: "Delivering",  label: "Đang bàn giao" },
+  { key: "Checking",    label: "Đã giao" },
   { key: "Completed",   label: "Hoàn thành" },
-  { key: "Dispute",     label: "Tranh chấp" },
+  { key: "Disputed",    label: "Tranh chấp" },
   { key: "Refunded",    label: "Hoàn tiền" },
   { key: "Cancelled",   label: "Đã hủy" },
 ] as const;
@@ -37,11 +37,11 @@ const DELIVERY_LABEL: Record<string, string> = {
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   PendingPayment: { label: "Chờ TT",     cls: "bg-warning/15 text-warning"  },
-  Paid:           { label: "Đã TT",      cls: "bg-accent/15 text-accent"    },
-  Processing:     { label: "Đang xử lý", cls: "bg-brand/15 text-brand"      },
-  Delivered:      { label: "Đã giao",    cls: "bg-accent/15 text-accent"    },
+  EscrowLocked:   { label: "Đã vào escrow", cls: "bg-accent/15 text-accent" },
+  Delivering:     { label: "Đang bàn giao", cls: "bg-brand/15 text-brand"   },
+  Checking:       { label: "Đã giao",    cls: "bg-accent/15 text-accent"    },
   Completed:      { label: "Hoàn thành", cls: "bg-success/15 text-success"  },
-  Dispute:        { label: "Tranh chấp", cls: "bg-danger/15 text-danger"    },
+  Disputed:       { label: "Tranh chấp", cls: "bg-danger/15 text-danger"    },
   Refunded:       { label: "Hoàn tiền",  cls: "bg-text-muted/15 text-text-muted" },
   Cancelled:      { label: "Đã hủy",     cls: "bg-text-muted/15 text-text-muted" },
 };
@@ -140,7 +140,7 @@ function DeliverModal({
 // ── Order Row ─────────────────────────────────────────────────────────────────
 function OrderRow({ order, onDeliver }: { order: ApiSellerOrderLine; onDeliver: (o: ApiSellerOrderLine) => void }) {
   const [expanded, setExpanded] = useState(false);
-  const canDeliver = (order.status === "Paid" || order.status === "Processing") && order.delivery !== "Auto";
+  const canDeliver = (order.status === "EscrowLocked" || order.status === "Delivering") && order.delivery !== "Auto";
 
   return (
     <>
@@ -180,7 +180,7 @@ function OrderRow({ order, onDeliver }: { order: ApiSellerOrderLine; onDeliver: 
               <CheckCircle2 className="size-3.5" /> Hoàn thành
             </span>
           )}
-          {order.status === "Dispute" && (
+          {order.status === "Disputed" && (
             <span className="flex items-center gap-1 text-xs text-danger justify-end">
               <AlertTriangle className="size-3.5" /> Tranh chấp
             </span>
@@ -257,7 +257,7 @@ export function SellerOrdersClient() {
     return o.orderCode.toLowerCase().includes(q) || o.productTitle.toLowerCase().includes(q) || o.buyerDisplayName.toLowerCase().includes(q);
   });
 
-  const awaiting = orders.filter(o => o.status === "Paid" || o.status === "Processing").length;
+  const awaiting = orders.filter(o => o.status === "EscrowLocked" || o.status === "Delivering").length;
   const completed = orders.filter(o => o.status === "Completed").length;
   const totalRevenue = orders.filter(o => o.status === "Completed").reduce((s, o) => s + o.lineTotal, 0);
 

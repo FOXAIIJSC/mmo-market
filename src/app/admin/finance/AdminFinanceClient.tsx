@@ -9,7 +9,7 @@ import { Stat } from "@/components/ui/Stat";
 import { adminNav } from "@/lib/adminNav";
 import { useAuth } from "@/lib/AuthContext";
 import { apiFetch } from "@/lib/api";
-import type { ApiAdminMetrics, ApiAdminWithdraw } from "@/lib/apiTypes";
+import type { ApiAdminMetrics, ApiAdminWithdraw, ApiFinanceReconciliation } from "@/lib/apiTypes";
 import { formatRelativeTime, formatVND } from "@/lib/format";
 
 const TABS = [
@@ -31,6 +31,7 @@ export function AdminFinanceClient() {
   const [tab, setTab] = useState("Pending");
   const [items, setItems] = useState<ApiAdminWithdraw[]>([]);
   const [metrics, setMetrics] = useState<ApiAdminMetrics | null>(null);
+  const [recon, setRecon] = useState<ApiFinanceReconciliation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,12 +39,14 @@ export function AdminFinanceClient() {
     if (!tk) return;
     try {
       const filter = (t ?? tab) === "all" ? "" : `?status=${t ?? tab}`;
-      const [list, m] = await Promise.all([
+      const [list, m, rc] = await Promise.all([
         apiFetch<ApiAdminWithdraw[]>(`/api/admin/withdrawals${filter}`, { token: tk }),
         apiFetch<ApiAdminMetrics>("/api/admin/metrics", { token: tk }),
+        apiFetch<ApiFinanceReconciliation>("/api/admin/finance/reconciliation", { token: tk }),
       ]);
       setItems(list);
       setMetrics(m);
+      setRecon(rc);
       setError(null);
     } catch (e) {
       setError((e as Error).message);
@@ -96,9 +99,33 @@ export function AdminFinanceClient() {
 
       <div className="grid gap-4 md:grid-cols-3">
         <Stat label="GMV 30 ngày" value={formatVND(metrics?.gmv ?? 0)} tone="brand" />
-        <Stat label="Doanh thu sàn (5%)" value={formatVND(metrics?.revenue ?? 0)} tone="success" />
+        <Stat label="Doanh thu sàn (phí)" value={formatVND(metrics?.revenue ?? 0)} tone="success" />
         <Stat label="Yêu cầu rút chờ duyệt" value={String(metrics?.pendingWithdrawals ?? 0)} tone="warning" />
       </div>
+
+      {recon && (
+        <div className="mt-6 rounded-2xl border border-border bg-bg-card p-5">
+          <h3 className="text-sm font-bold text-text">Đối soát dòng tiền (tài khoản logic)</h3>
+          <p className="mt-0.5 text-xs text-text-muted">Tổng hợp từ ledger nội bộ. Ví Platform/Reserve/Escrow là tài khoản logic, chưa tách vật lý.</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { label: "Ví Platform (phí thực thu)", value: recon.platformRevenue, tone: "text-success" },
+              { label: "Escrow đang giữ", value: recon.escrowHeld, tone: "text-brand" },
+              { label: "Reserve đã hoàn (tranh chấp/hủy)", value: recon.totalRefunded, tone: "text-warning" },
+              { label: "Cọc đăng tin đang khóa", value: recon.depositsHeld, tone: "text-accent" },
+              { label: "Cọc đã tịch thu", value: recon.depositsForfeited, tone: "text-success" },
+              { label: "Tổng nạp ví", value: recon.totalTopup, tone: "text-text" },
+              { label: "Tổng đã rút", value: recon.totalWithdrawn, tone: "text-text" },
+              { label: "Tổng số dư ví user", value: recon.userWalletTotal, tone: "text-text" },
+            ].map((r) => (
+              <div key={r.label} className="rounded-xl border border-border bg-bg-elev p-3">
+                <p className="text-xs text-text-muted">{r.label}</p>
+                <p className={`mt-1 text-lg font-bold ${r.tone}`}>{formatVND(r.value)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="mt-6 rounded-2xl border border-border bg-bg-card">
         <div className="flex items-center gap-1 overflow-x-auto border-b border-border px-2 py-2 text-sm">

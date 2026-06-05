@@ -104,6 +104,22 @@ public class ZaloPayService
         return null;
     }
 
+    // Parse (zp_trans_id, amount) from IPN data for reconciliation/logging.
+    public static (string TransId, decimal Amount) ParseTransInfoFromIpn(string data)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(data);
+            var root = doc.RootElement;
+            var transId = root.TryGetProperty("zp_trans_id", out var zt)
+                ? (zt.ValueKind == JsonValueKind.Number ? zt.GetInt64().ToString() : zt.GetString() ?? "")
+                : "";
+            decimal amount = root.TryGetProperty("amount", out var am) && am.TryGetDecimal(out var d) ? d : 0m;
+            return (transId, amount);
+        }
+        catch { return ("", 0m); }
+    }
+
     // Parse ZaloPay payment status from IPN data (1 = success).
     public static int ParseStatusFromIpn(string data)
     {

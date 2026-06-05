@@ -68,7 +68,8 @@ public class CatalogService
 
     public async Task<SellerSummaryDto[]> GetSellersAsync(CancellationToken ct)
     {
-        var sellers = await _db.Sellers.Include(s => s.User).OrderByDescending(s => s.TotalSold).ToListAsync(ct);
+        var sellers = await _db.Sellers.Include(s => s.User)
+            .OrderByDescending(s => s.TrustScore).ThenByDescending(s => s.TotalSold).ToListAsync(ct);
         return sellers.Select(MapSeller).ToArray();
     }
 
@@ -87,7 +88,7 @@ public class CatalogService
 
     public static SellerSummaryDto MapSeller(Seller s) => new(
         s.Id, s.Username, s.DisplayName, s.AvatarColor, s.Rating, s.ReviewCount,
-        s.TotalSold, s.Badge, s.User?.KycStatus.ToString() ?? "None");
+        s.TotalSold, s.Badge, s.User?.KycStatus.ToString() ?? "None", s.TrustScore);
 
     public static string[] DeserializeArr(string json)
     {

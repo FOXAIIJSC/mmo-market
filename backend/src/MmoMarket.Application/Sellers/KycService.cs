@@ -5,8 +5,8 @@ using MmoMarket.Domain.Enums;
 
 namespace MmoMarket.Application.Sellers;
 
-public record KycSubmitDto(string FullName, string IdNumber, string Address, string PhoneNumber);
-public record KycDto(Guid Id, string Status, string FullName, string IdNumber, string Address, string PhoneNumber, DateTime CreatedAt, string? RejectionReason);
+public record KycSubmitDto(string FullName, string IdNumber, string Address, string PhoneNumber, string? FrontImage = null, string? BackImage = null);
+public record KycDto(Guid Id, string Status, string FullName, string IdNumber, string Address, string PhoneNumber, DateTime CreatedAt, string? RejectionReason, string? FrontImage, string? BackImage);
 
 public class KycService
 {
@@ -25,6 +25,8 @@ public class KycService
             IdNumber = dto.IdNumber,
             Address = dto.Address,
             PhoneNumber = dto.PhoneNumber,
+            FrontImage = dto.FrontImage,
+            BackImage = dto.BackImage,
             Status = KycStatus.Pending,
         };
         _db.KycSubmissions.Add(sub);
@@ -89,5 +91,5 @@ public class KycService
         return Map(sub);
     }
 
-    public static KycDto Map(KycSubmission k) => new(k.Id, k.Status.ToString(), k.FullName, k.IdNumber, k.Address, k.PhoneNumber, k.CreatedAt, k.RejectionReason);
+    public static KycDto Map(KycSubmission k) => new(k.Id, k.Status.ToString(), k.FullName, k.IdNumber, k.Address, k.PhoneNumber, k.CreatedAt, k.RejectionReason, k.FrontImage, k.BackImage);
 }

@@ -103,6 +103,7 @@ export function AdminSellersClient() {
                 <th className="px-4 py-3">Họ tên</th>
                 <th className="px-4 py-3">CCCD</th>
                 <th className="px-4 py-3">SĐT</th>
+                <th className="px-4 py-3">Giấy tờ</th>
                 <th className="px-4 py-3 text-right">Gửi lúc</th>
                 <th className="px-4 py-3 text-right">Hành động</th>
               </tr>
@@ -113,6 +114,20 @@ export function AdminSellersClient() {
                   <td className="px-4 py-3 font-medium text-text">{k.fullName}</td>
                   <td className="px-4 py-3 font-mono text-xs text-text-muted">{k.idNumber}</td>
                   <td className="px-4 py-3 font-mono text-xs text-text-muted">{k.phoneNumber}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1.5">
+                      {([["frontImage", "Trước"], ["backImage", "Sau"]] as const).map(([key, lbl]) =>
+                        k[key] ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <a key={key} href={k[key]!} target="_blank" rel="noopener noreferrer" title={`CCCD mặt ${lbl}`}>
+                            <img src={k[key]!} alt={lbl} className="h-9 w-14 rounded border border-border object-cover hover:ring-2 hover:ring-brand" />
+                          </a>
+                        ) : (
+                          <span key={key} className="grid h-9 w-14 place-items-center rounded border border-dashed border-border text-[10px] text-text-dim">{lbl}: —</span>
+                        )
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-right text-xs text-text-muted">{formatRelativeTime(k.createdAt)}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex justify-end gap-1">

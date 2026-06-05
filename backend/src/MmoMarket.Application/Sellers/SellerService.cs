@@ -13,7 +13,8 @@ public record SellerProductDto(
     Guid Id, string Slug, string Title, string CategorySlug, decimal Price, decimal? ComparePrice,
     string Delivery, int WarrantyDays, int Stock, int Sold, double Rating, int ReviewCount,
     string ThumbnailColor, string? ThumbnailIcon, string Status, string Description,
-    int InventoryAvailable, int InventoryReserved, int InventorySold);
+    int InventoryAvailable, int InventoryReserved, int InventorySold,
+    decimal DepositAmount, string DepositStatus);
 
 public record SellerProductCreateDto(
     string Title, string CategorySlug, decimal Price, decimal? ComparePrice, string Delivery,
@@ -48,15 +49,17 @@ public record WithdrawDto(Guid Id, decimal Amount, string Method, string Account
 public record SellerDashboardDto(
     decimal Revenue30d, int Orders30d, int ProductsActive, int ProductsPending,
     int OrdersAwaitingDelivery, int OpenDisputes, int PendingWithdrawals,
-    decimal AvailableBalance);
+    decimal AvailableBalance, int TrustScore);
 
 public class SellerService
 {
     private readonly IAppDbContext _db;
     private readonly ConfigService _config;
     private readonly TotpService _totp;
-    public SellerService(IAppDbContext db, ConfigService config, TotpService totp)
-    { _db = db; _config = config; _totp = totp; }
+    private readonly SellerPlanService _plans;
+    private readonly Wallet.TransactionLimitService _limits;
+    public SellerService(IAppDbContext db, ConfigService config, TotpService totp, SellerPlanService plans, Wallet.TransactionLimitService limits)
+    { _db = db; _config = config; _totp = totp; _plans = plans; _limits = limits; }
 
     private async Task<Seller> GetSellerForUserAsync(Guid userId, CancellationToken ct)
     {
@@ -83,24 +86,22 @@ public class SellerService
         var prodPending = await _db.Products.CountAsync(p => p.SellerId == seller.Id && p.Status == ProductStatus.Pending, ct);
         var awaiting = await _db.OrderLines
             .Include(l => l.Order)
-            .CountAsync(l => l.SellerId == seller.Id && (l.Order!.Status == OrderStatus.Paid || l.Order.Status == OrderStatus.Processing) && l.Delivery != DeliveryMethod.Auto, ct);
+            .CountAsync(l => l.SellerId == seller.Id && (l.Order!.Status == OrderStatus.EscrowLocked || l.Order.Status == OrderStatus.Delivering) && l.Delivery != DeliveryMethod.Auto, ct);
         var openDisputes = await _db.Disputes.CountAsync(d => d.SellerId == seller.Id && (d.Status == DisputeStatus.Open || d.Status == DisputeStatus.Investigating), ct);
         var pendingWd = await _db.WithdrawRequests.CountAsync(w => w.SellerUserId == userId && w.Status == WithdrawStatus.Pending, ct);
-        var feeRate = await _config.GetDecimalAsync(ConfigKeys.FeeRate, 0.05m, ct);
-        var sellerCommission = 1m - feeRate;
-        var earnedList = await _db.OrderLines
+        var earnedRows = await _db.OrderLines
             .Include(l => l.Order)
             .Where(l => l.SellerId == seller.Id && l.Order!.Status == OrderStatus.Completed)
-            .Select(l => l.UnitPrice * l.Quantity)
+            .Select(l => new { Gross = l.UnitPrice * l.Quantity, l.FeeAmount })
             .ToListAsync(ct);
-        var totalEarned = earnedList.Sum() * sellerCommission;
+        var totalEarned = earnedRows.Sum(r => r.Gross - r.FeeAmount);
         var withdrawnList = await _db.WithdrawRequests
             .Where(w => w.SellerUserId == userId && (w.Status == WithdrawStatus.Approved || w.Status == WithdrawStatus.Paid))
             .Select(w => w.Amount)
             .ToListAsync(ct);
         var totalWithdrawn = withdrawnList.Sum();
         var available = Math.Max(0m, totalEarned - totalWithdrawn);
-        return new SellerDashboardDto(revenue30d, orders30d, prodActive, prodPending, awaiting, openDisputes, pendingWd, available);
+        return new SellerDashboardDto(revenue30d, orders30d, prodActive, prodPending, awaiting, openDisputes, pendingWd, available, seller.TrustScore);
     }
 
     public async Task<SellerProductDto[]> ListMyProductsAsync(Guid userId, CancellationToken ct)
@@ -119,6 +120,23 @@ public class SellerService
         var category = await _db.Categories.FirstOrDefaultAsync(c => c.Slug == dto.CategorySlug, ct)
             ?? throw new AppException("Danh mục không tồn tại");
         if (dto.Price <= 0) throw new AppException("Giá không hợp lệ");
+
+        // Giới hạn số tin đăng theo gói thành viên (P1.2)
+        var plan = await _plans.ResolvePlanAsync(seller, ct);
+        if (plan.MaxListings >= 0)
+        {
+            var listingCount = await _db.Products.CountAsync(p => p.SellerId == seller.Id
+                && p.Status != ProductStatus.Banned && p.Status != ProductStatus.Rejected, ct);
+            if (listingCount >= plan.MaxListings)
+                throw new AppException($"Gói {plan.Name} chỉ cho phép tối đa {plan.MaxListings} tin đăng. Vui lòng nâng cấp gói để đăng thêm.");
+        }
+        // Cọc đăng tin (P1.4): khóa % giá từ ví seller, hoàn khi gỡ tin / tịch thu khi bùng hàng.
+        var deposit = await ComputeListingDepositAsync(dto.Price, ct);
+        var sellerUser = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct)
+            ?? throw new AppException("User không tồn tại", 404);
+        if (deposit > 0 && sellerUser.WalletBalance < deposit)
+            throw new AppException($"Cần đặt cọc {deposit:N0}đ để đăng tin nhưng số dư ví không đủ. Vui lòng nạp thêm.");
+
         var slugBase = string.IsNullOrWhiteSpace(dto.Title) ? Guid.NewGuid().ToString("N")[..8] : Slugify(dto.Title);
         var slug = slugBase;
         var i = 1;
@@ -148,8 +166,26 @@ public class SellerService
             Rating = 0,
             ReviewCount = 0,
             Sold = 0,
+            DepositAmount = deposit,
+            DepositStatus = deposit > 0 ? ListingDepositStatus.Held : ListingDepositStatus.None,
         };
         _db.Products.Add(product);
+
+        if (deposit > 0)
+        {
+            sellerUser.WalletBalance -= deposit;
+            _db.WalletTxns.Add(new WalletTxn
+            {
+                UserId = userId,
+                Type = WalletTxnType.Deposit,
+                Amount = -deposit,
+                Status = WalletTxnStatus.Completed,
+                Note = $"Cọc đăng tin: {dto.Title}",
+            });
+            AddAudit(userId, "Seller", "listing_deposit_hold", "Product", product.Slug, deposit,
+                $"Khóa cọc đăng tin {dto.Title}");
+        }
+
         await _db.SaveChangesAsync(ct);
         return MapProduct(product, new());
     }
@@ -190,6 +226,27 @@ public class SellerService
         var seller = await GetSellerForUserAsync(userId, ct);
         var product = await _db.Products.FirstOrDefaultAsync(p => p.Id == productId && p.SellerId == seller.Id, ct)
             ?? throw new AppException("Không tìm thấy sản phẩm", 404);
+        // Hoàn cọc đăng tin nếu đang khóa (P1.4)
+        if (product.DepositStatus == ListingDepositStatus.Held && product.DepositAmount > 0)
+        {
+            var sellerUser = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+            if (sellerUser != null)
+            {
+                sellerUser.WalletBalance += product.DepositAmount;
+                _db.WalletTxns.Add(new WalletTxn
+                {
+                    UserId = userId,
+                    Type = WalletTxnType.DepositRefund,
+                    Amount = product.DepositAmount,
+                    Status = WalletTxnStatus.Completed,
+                    Note = $"Hoàn cọc đăng tin: {product.Title}",
+                });
+                AddAudit(userId, "Seller", "listing_deposit_refund", "Product", product.Slug, product.DepositAmount,
+                    $"Hoàn cọc khi gỡ tin {product.Title}");
+            }
+            product.DepositStatus = ListingDepositStatus.Refunded;
+        }
+
         var hasOrders = await _db.OrderLines.AnyAsync(l => l.ProductId == productId, ct);
         if (hasOrders)
         {
@@ -221,20 +278,22 @@ public class SellerService
         var line = await _db.OrderLines.Include(l => l.Order).ThenInclude(o => o!.Buyer)
             .FirstOrDefaultAsync(l => l.Id == orderLineId && l.SellerId == seller.Id, ct)
             ?? throw new AppException("Không tìm thấy đơn", 404);
-        if (line.Order!.Status != OrderStatus.Paid && line.Order.Status != OrderStatus.Processing)
-            throw new AppException($"Chỉ có thể giao đơn ở trạng thái Paid/Processing (hiện {line.Order.Status})");
+        if (line.Order!.Status != OrderStatus.EscrowLocked && line.Order.Status != OrderStatus.Delivering)
+            throw new AppException($"Chỉ có thể giao đơn ở trạng thái EscrowLocked/Delivering (hiện {line.Order.Status})");
         line.DeliveredItemsJson = JsonSerializer.Serialize(deliveredItems);
-        // If all lines in order are delivered, mark order as Delivered
+        // Nếu tất cả line đã bàn giao → vào cửa sổ kiểm tra của buyer (Checking)
         var allLines = await _db.OrderLines.Where(l => l.OrderId == line.OrderId).ToListAsync(ct);
         if (allLines.All(l => l.Id == line.Id || !string.IsNullOrWhiteSpace(l.DeliveredItemsJson)))
         {
-            line.Order.Status = OrderStatus.Delivered;
+            var releaseDays = await _config.GetIntAsync(ConfigKeys.EscrowReleaseDays, 2, ct);
+            line.Order.Status = OrderStatus.Checking;
             line.Order.DeliveredAt = DateTime.UtcNow;
-            line.Order.EscrowReleaseAt = DateTime.UtcNow.AddDays(3);
+            line.Order.DeliverDueAt = null; // đã giao đúng hạn → bỏ deadline auto-cancel
+            line.Order.EscrowReleaseAt = DateTime.UtcNow.AddDays(releaseDays);
         }
         else
         {
-            line.Order.Status = OrderStatus.Processing;
+            line.Order.Status = OrderStatus.Delivering;
         }
         await _db.SaveChangesAsync(ct);
         return MapOrderLine(line);
@@ -291,6 +350,7 @@ public class SellerService
         var dashboard = await GetDashboardAsync(userId, ct);
         if (dto.Amount <= 0) throw new AppException("Số tiền không hợp lệ");
         if (dto.Amount > dashboard.AvailableBalance) throw new AppException($"Vượt quá số dư khả dụng ({dashboard.AvailableBalance:N0})");
+        await _limits.EnsureWithdrawAllowedAsync(userId, dto.Amount, ct);
 
         var user = await _db.Users.FindAsync(new object[] { userId }, ct);
         if (user?.TwoFactorEnabled == true)
@@ -326,7 +386,8 @@ public class SellerService
         p.ThumbnailColor, p.ThumbnailIcon, p.Status.ToString(), p.Description,
         inv.Count(i => !i.Reserved && !i.Sold),
         inv.Count(i => i.Reserved && !i.Sold),
-        inv.Count(i => i.Sold));
+        inv.Count(i => i.Sold),
+        p.DepositAmount, p.DepositStatus.ToString());
 
     private static SellerOrderLineDto MapOrderLine(OrderLine l)
     {
@@ -360,6 +421,34 @@ public class SellerService
     {
         using var sha = System.Security.Cryptography.SHA256.Create();
         return Convert.ToHexString(sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(s))).ToLowerInvariant();
+    }
+
+    /// <summary>Cọc đăng tin = % giá (clamp min/max). Trả 0 nếu tắt.</summary>
+    private async Task<decimal> ComputeListingDepositAsync(decimal price, CancellationToken ct)
+    {
+        var enabled = await _config.GetBoolAsync(ConfigKeys.ListingDepositEnabled, false, ct);
+        if (!enabled) return 0m;
+        var percent = await _config.GetDecimalAsync(ConfigKeys.ListingDepositPercent, 5m, ct);
+        var min = await _config.GetDecimalAsync(ConfigKeys.ListingDepositMin, 0m, ct);
+        var max = await _config.GetDecimalAsync(ConfigKeys.ListingDepositMax, 0m, ct);
+        var deposit = Math.Round(price * percent / 100m, 0, MidpointRounding.AwayFromZero);
+        if (min > 0 && deposit < min) deposit = min;
+        if (max > 0 && deposit > max) deposit = max;
+        return deposit;
+    }
+
+    private void AddAudit(Guid? actorId, string actorRole, string action, string entityType, string? entityId, decimal? amount, string? detail)
+    {
+        _db.AuditLogs.Add(new AuditLog
+        {
+            ActorUserId = actorId,
+            ActorRole = actorRole,
+            Action = action,
+            EntityType = entityType,
+            EntityId = entityId,
+            Amount = amount,
+            Detail = detail,
+        });
     }
 
     // ── Seller Coupons ────────────────────────────────────────────────────────

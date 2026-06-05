@@ -21,6 +21,8 @@ public static class Seeder
         await SeedDemoConversationsAsync(db, ct);
         await SeedDefaultConfigAsync(db, ct);
         await SeedDemoLoyaltyRewardsAsync(db, ct);
+        await SeedSellerPlansAsync(db, ct);
+        await SeedFeeConfigsAsync(db, ct);
         if (await db.Categories.AnyAsync(ct)) return;
 
         // Categories — match frontend slugs
@@ -71,6 +73,7 @@ public static class Seeder
             Role = UserRole.Seller,
             AvatarColor = "#7c3aed",
             KycStatus = KycStatus.Approved,
+            WalletBalance = 3_000_000m,
             ReferralCode = "KIMCHI01",
         };
         var sellerUser2 = new User
@@ -82,6 +85,7 @@ public static class Seeder
             Role = UserRole.Seller,
             AvatarColor = "#22d3ee",
             KycStatus = KycStatus.Approved,
+            WalletBalance = 3_000_000m,
             ReferralCode = "VYHAN001",
         };
         var sellerUser3 = new User
@@ -93,14 +97,15 @@ public static class Seeder
             Role = UserRole.Seller,
             AvatarColor = "#fb7185",
             KycStatus = KycStatus.Approved,
+            WalletBalance = 3_000_000m,
             ReferralCode = "QUYNH001",
         };
 
         db.Users.AddRange(adminUser, buyerUser, sellerUser1, sellerUser2, sellerUser3);
 
-        var s1 = new Seller { UserId = sellerUser1.Id, Username = "kimchi", DisplayName = "KimChi Shop", AvatarColor = "#7c3aed", Rating = 4.9, ReviewCount = 1240, TotalSold = 8420, Badge = "top", Bio = "Shop chuyên AI account & Tool, bảo hành dài hạn.", ResponseTime = "5 phút", JoinedAt = DateTime.UtcNow.AddYears(-2) };
-        var s2 = new Seller { UserId = sellerUser2.Id, Username = "vyhan", DisplayName = "VyHan Studio", AvatarColor = "#22d3ee", Rating = 4.85, ReviewCount = 920, TotalSold = 5100, Badge = "verified", Bio = "Tools sáng tạo, gift card chính hãng.", ResponseTime = "10 phút", JoinedAt = DateTime.UtcNow.AddMonths(-18) };
-        var s3 = new Seller { UserId = sellerUser3.Id, Username = "quynhnhu", DisplayName = "QuynhNhu Digital", AvatarColor = "#fb7185", Rating = 4.78, ReviewCount = 612, TotalSold = 3210, Badge = "verified", Bio = "Khoá học chất lượng, hỗ trợ tận tình.", ResponseTime = "20 phút", JoinedAt = DateTime.UtcNow.AddMonths(-9) };
+        var s1 = new Seller { UserId = sellerUser1.Id, Username = "kimchi", DisplayName = "KimChi Shop", AvatarColor = "#7c3aed", Rating = 4.9, ReviewCount = 1240, TotalSold = 8420, Badge = "top", Bio = "Shop chuyên AI account & Tool, bảo hành dài hạn.", ResponseTime = "5 phút", JoinedAt = DateTime.UtcNow.AddYears(-2), TrustScore = 98 };
+        var s2 = new Seller { UserId = sellerUser2.Id, Username = "vyhan", DisplayName = "VyHan Studio", AvatarColor = "#22d3ee", Rating = 4.85, ReviewCount = 920, TotalSold = 5100, Badge = "verified", Bio = "Tools sáng tạo, gift card chính hãng.", ResponseTime = "10 phút", JoinedAt = DateTime.UtcNow.AddMonths(-18), TrustScore = 92 };
+        var s3 = new Seller { UserId = sellerUser3.Id, Username = "quynhnhu", DisplayName = "QuynhNhu Digital", AvatarColor = "#fb7185", Rating = 4.78, ReviewCount = 612, TotalSold = 3210, Badge = "verified", Bio = "Khoá học chất lượng, hỗ trợ tận tình.", ResponseTime = "20 phút", JoinedAt = DateTime.UtcNow.AddMonths(-9), TrustScore = 88 };
         db.Sellers.AddRange(s1, s2, s3);
 
         // Products — 3 per category for demo
@@ -357,7 +362,92 @@ public static class Seeder
                 CreatedAt TEXT NOT NULL,
                 UpdatedAt TEXT NULL
             );
+
+            -- P0: Audit log bất biến
+            CREATE TABLE IF NOT EXISTS AuditLogs (
+                Id TEXT NOT NULL CONSTRAINT PK_AuditLogs PRIMARY KEY,
+                ActorUserId TEXT NULL,
+                ActorRole TEXT NOT NULL DEFAULT 'System',
+                Action TEXT NOT NULL DEFAULT '',
+                EntityType TEXT NOT NULL DEFAULT '',
+                EntityId TEXT NULL,
+                Amount TEXT NULL,
+                Detail TEXT NULL,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NULL
+            );
+            CREATE INDEX IF NOT EXISTS IX_AuditLogs_CreatedAt ON AuditLogs(CreatedAt);
+            CREATE INDEX IF NOT EXISTS IX_AuditLogs_EntityType_EntityId ON AuditLogs(EntityType, EntityId);
+
+            -- P0: Lịch sử giao dịch cổng thanh toán
+            CREATE TABLE IF NOT EXISTS PaymentTransactions (
+                Id TEXT NOT NULL CONSTRAINT PK_PaymentTransactions PRIMARY KEY,
+                OrderId TEXT NULL,
+                Method INTEGER NOT NULL DEFAULT 0,
+                Provider TEXT NOT NULL DEFAULT '',
+                ProviderTxnId TEXT NOT NULL DEFAULT '',
+                Amount TEXT NOT NULL DEFAULT '0',
+                Status TEXT NOT NULL DEFAULT '',
+                RawPayload TEXT NULL,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS IX_PaymentTransactions_Provider_ProviderTxnId ON PaymentTransactions(Provider, ProviderTxnId);
+            CREATE INDEX IF NOT EXISTS IX_PaymentTransactions_OrderId ON PaymentTransactions(OrderId);
+
+            -- P1: Cấu hình phí theo danh mục + ngưỡng giá
+            CREATE TABLE IF NOT EXISTS FeeConfigs (
+                Id TEXT NOT NULL CONSTRAINT PK_FeeConfigs PRIMARY KEY,
+                CategorySlug TEXT NOT NULL DEFAULT '',
+                MinPrice TEXT NOT NULL DEFAULT '0',
+                MaxPrice TEXT NULL,
+                SellerFeePercent TEXT NOT NULL DEFAULT '0',
+                Note TEXT NULL,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NULL
+            );
+            CREATE INDEX IF NOT EXISTS IX_FeeConfigs_CategorySlug_MinPrice ON FeeConfigs(CategorySlug, MinPrice);
+
+            -- P1: Gói thành viên Seller
+            CREATE TABLE IF NOT EXISTS SellerPlans (
+                Id TEXT NOT NULL CONSTRAINT PK_SellerPlans PRIMARY KEY,
+                Code TEXT NOT NULL DEFAULT '',
+                Name TEXT NOT NULL DEFAULT '',
+                PricePerMonth TEXT NOT NULL DEFAULT '0',
+                FeeDiscountPercent TEXT NOT NULL DEFAULT '0',
+                MaxListings INTEGER NOT NULL DEFAULT -1,
+                BoostsPerMonth INTEGER NOT NULL DEFAULT 0,
+                Badge TEXT NULL,
+                Position INTEGER NOT NULL DEFAULT 0,
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS IX_SellerPlans_Code ON SellerPlans(Code);
         ", ct);
+
+        // Thêm cột mới cho bảng đã tồn tại (SQLite không hỗ trợ ADD COLUMN IF NOT EXISTS).
+        await AddColumnIfMissingAsync(db, "Orders", "DeliverDueAt", "TEXT NULL", ct);
+        await AddColumnIfMissingAsync(db, "OrderLines", "FeeAmount", "TEXT NOT NULL DEFAULT '0'", ct);
+        await AddColumnIfMissingAsync(db, "Sellers", "PlanCode", "TEXT NOT NULL DEFAULT 'free'", ct);
+        await AddColumnIfMissingAsync(db, "Sellers", "PlanExpiresAt", "TEXT NULL", ct);
+        await AddColumnIfMissingAsync(db, "Products", "DepositAmount", "TEXT NOT NULL DEFAULT '0'", ct);
+        await AddColumnIfMissingAsync(db, "Products", "DepositStatus", "INTEGER NOT NULL DEFAULT 0", ct);
+        await AddColumnIfMissingAsync(db, "Sellers", "TrustScore", "INTEGER NOT NULL DEFAULT 80", ct);
+        await AddColumnIfMissingAsync(db, "Sellers", "LastViolationAt", "TEXT NULL", ct);
+        await AddColumnIfMissingAsync(db, "Sellers", "LastTrustBonusAt", "TEXT NULL", ct);
+        await AddColumnIfMissingAsync(db, "KycSubmissions", "FrontImage", "TEXT NULL", ct);
+        await AddColumnIfMissingAsync(db, "KycSubmissions", "BackImage", "TEXT NULL", ct);
+    }
+
+    /// <summary>Thêm cột vào bảng nếu chưa tồn tại (idempotent cho SQLite).</summary>
+    private static async Task AddColumnIfMissingAsync(AppDbContext db, string table, string column, string definition, CancellationToken ct)
+    {
+        var count = await db.Database
+            .SqlQueryRaw<long>($"SELECT COUNT(*) AS \"Value\" FROM pragma_table_info('{table}') WHERE name = {{0}}", column)
+            .FirstAsync(ct);
+        if (count == 0)
+            await db.Database.ExecuteSqlRawAsync($"ALTER TABLE \"{table}\" ADD COLUMN \"{column}\" {definition};", ct);
     }
 
     private static async Task SeedDefaultConfigAsync(AppDbContext db, CancellationToken ct)
@@ -386,9 +476,36 @@ public static class Seeder
             // Transaction rules
             ["min_withdraw"]           = "50000",
             ["max_withdraw"]           = "50000000",
-            ["escrow_release_days"]    = "3",
+            ["escrow_release_days"]    = "2",   // 48h (P0)
+            ["deliver_window_hours"]   = "2",   // T+2h (P0)
             ["dispute_sla_hours"]      = "72",
             ["kyc_required_to_sell"]   = "true",
+            // Giới hạn nạp/rút theo ngày theo cấp tài khoản (P1.3, §7.2). 0 = không giới hạn.
+            ["limit_deposit_unverified"]  = "2000000",
+            ["limit_withdraw_unverified"] = "1000000",
+            ["limit_deposit_kyc"]         = "20000000",
+            ["limit_withdraw_kyc"]        = "10000000",
+            ["limit_deposit_seller"]      = "50000000",
+            ["limit_withdraw_seller"]     = "30000000",
+            ["limit_deposit_vip"]         = "0",
+            ["limit_withdraw_vip"]        = "50000000",
+            // Cọc đăng tin (P1.4)
+            ["listing_deposit_enabled"]   = "true",
+            ["listing_deposit_percent"]   = "5",
+            ["listing_deposit_min"]       = "10000",
+            ["listing_deposit_max"]       = "500000",
+            // Trust Score (P2.1, §8)
+            ["trust_start"]               = "80",
+            ["trust_complete_5star"]      = "2",
+            ["trust_complete_noreview"]   = "1",
+            ["trust_review_low"]          = "-3",
+            ["trust_dispute_lost"]        = "-10",
+            ["trust_late_delivery"]       = "-5",
+            ["trust_violation"]           = "-15",
+            ["trust_clean_30d_bonus"]     = "5",
+            // Chống lạm dụng tranh chấp (P2.3) + partial refund mặc định (P2.4)
+            ["dispute_max_per_month"]     = "3",
+            ["partial_refund_default_percent"] = "50",
             // Payment
             ["enabled_payments"]       = "Wallet,VietQr,Momo,ZaloPay,VnPay",
         };
@@ -402,6 +519,41 @@ public static class Seeder
             db.SiteConfigs.AddRange(missing);
             await db.SaveChangesAsync(ct);
         }
+    }
+
+    private static async Task SeedSellerPlansAsync(AppDbContext db, CancellationToken ct)
+    {
+        if (await db.SellerPlans.AnyAsync(ct)) return;
+        db.SellerPlans.AddRange(
+            new SellerPlan { Code = "free",  Name = "Free",       PricePerMonth = 0m,       FeeDiscountPercent = 0m,  MaxListings = 10, BoostsPerMonth = 0,  Badge = null,       Position = 1 },
+            new SellerPlan { Code = "basic", Name = "Seller Basic", PricePerMonth = 99_000m,  FeeDiscountPercent = 20m, MaxListings = 30, BoostsPerMonth = 5,  Badge = null,       Position = 2 },
+            new SellerPlan { Code = "pro",   Name = "Seller Pro",   PricePerMonth = 299_000m, FeeDiscountPercent = 40m, MaxListings = -1, BoostsPerMonth = 20, Badge = "verified", Position = 3 },
+            new SellerPlan { Code = "vip",   Name = "Seller VIP",   PricePerMonth = 599_000m, FeeDiscountPercent = 60m, MaxListings = -1, BoostsPerMonth = 50, Badge = "top",      Position = 4 }
+        );
+        await db.SaveChangesAsync(ct);
+    }
+
+    private static async Task SeedFeeConfigsAsync(AppDbContext db, CancellationToken ct)
+    {
+        if (await db.FeeConfigs.AnyAsync(ct)) return;
+        db.FeeConfigs.AddRange(
+            // Mặc định toàn sàn (fallback)
+            new FeeConfig { CategorySlug = "",           MinPrice = 0m, MaxPrice = null,      SellerFeePercent = 10m, Note = "Mặc định" },
+            // Acc/skin game: theo ngưỡng giá (acc thường <500k vs cao cấp ≥500k)
+            new FeeConfig { CategorySlug = "game",       MinPrice = 0m,       MaxPrice = 500_000m, SellerFeePercent = 9m, Note = "Acc game thường (<500k)" },
+            new FeeConfig { CategorySlug = "game",       MinPrice = 500_000m, MaxPrice = null,     SellerFeePercent = 6m, Note = "Acc game cao cấp (≥500k)" },
+            // Phần mềm / license key
+            new FeeConfig { CategorySlug = "tool",       MinPrice = 0m, MaxPrice = null, SellerFeePercent = 10m, Note = "Phần mềm / License Key" },
+            new FeeConfig { CategorySlug = "ai",         MinPrice = 0m, MaxPrice = null, SellerFeePercent = 10m, Note = "AI account" },
+            new FeeConfig { CategorySlug = "course",     MinPrice = 0m, MaxPrice = null, SellerFeePercent = 10m, Note = "Khoá học" },
+            // Gift card
+            new FeeConfig { CategorySlug = "giftcard",   MinPrice = 0m, MaxPrice = null, SellerFeePercent = 8m,  Note = "Gift card" },
+            // Social / email / SĐT ảo — tỷ lệ tranh chấp cao
+            new FeeConfig { CategorySlug = "social",     MinPrice = 0m, MaxPrice = null, SellerFeePercent = 15m, Note = "Social / Email / SĐT ảo" },
+            // Dịch vụ / tăng tương tác — rủi ro cao
+            new FeeConfig { CategorySlug = "engagement", MinPrice = 0m, MaxPrice = null, SellerFeePercent = 12m, Note = "Dịch vụ MMO / tăng tương tác" }
+        );
+        await db.SaveChangesAsync(ct);
     }
 
     private static async Task SeedDemoLoyaltyRewardsAsync(AppDbContext db, CancellationToken ct)

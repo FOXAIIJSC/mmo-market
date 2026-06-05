@@ -8,7 +8,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { adminNav } from "@/lib/adminNav";
 import { useAuth } from "@/lib/AuthContext";
 import { apiFetch } from "@/lib/api";
-import type { ApiFeeConfig, ApiLoyaltyConfig, ApiLoyaltyReward } from "@/lib/apiTypes";
+import type { ApiFeeConfig, ApiFeeTier, ApiLoyaltyConfig, ApiLoyaltyReward } from "@/lib/apiTypes";
 import { formatVND } from "@/lib/format";
 
 // ── Tier visual config ────────────────────────────────────────────────────────
@@ -148,14 +148,94 @@ function Toast({ msg }: { msg: string }) {
   );
 }
 
+// ── Fee tier (phí theo danh mục) ────────────────────────────────────────────────
+const CATEGORY_OPTIONS: { slug: string; label: string }[] = [
+  { slug: "", label: "Mặc định (mọi danh mục)" },
+  { slug: "ai", label: "AI Account" },
+  { slug: "tool", label: "Tool / Phần mềm" },
+  { slug: "course", label: "Khoá học" },
+  { slug: "giftcard", label: "Gift Card" },
+  { slug: "game", label: "Game" },
+  { slug: "social", label: "Mạng xã hội" },
+  { slug: "engagement", label: "Tăng tương tác" },
+];
+const categoryLabel = (slug: string) => CATEGORY_OPTIONS.find(c => c.slug === slug)?.label ?? slug;
+
+type FeeTierForm = { categorySlug: string; minPrice: number; maxPrice: number | null; sellerFeePercent: number; note: string };
+
+function FeeTierModal({ initial, onClose, onSave }: {
+  initial: (FeeTierForm & { id?: string }) | null;
+  onClose: () => void;
+  onSave: (data: FeeTierForm & { id?: string }) => Promise<void>;
+}) {
+  const [form, setForm] = useState<FeeTierForm>(initial ?? { categorySlug: "", minPrice: 0, maxPrice: null, sellerFeePercent: 10, note: "" });
+  const [saving, setSaving] = useState(false);
+  const set = (k: keyof FeeTierForm, v: unknown) => setForm(f => ({ ...f, [k]: v }));
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try { await onSave({ ...form, id: initial?.id }); onClose(); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <form onSubmit={submit} className="w-full max-w-md rounded-2xl border border-border bg-bg-card p-6 space-y-4 shadow-xl">
+        <h3 className="text-base font-bold text-text">{initial?.id ? "Sửa" : "Thêm"} mức phí danh mục</h3>
+        <div>
+          <label className="text-xs text-text-muted">Danh mục</label>
+          <select value={form.categorySlug} onChange={e => set("categorySlug", e.target.value)}
+            className="mt-1 w-full rounded-lg border border-border bg-bg-elev px-3 py-2 text-sm text-text outline-none focus:border-brand">
+            {CATEGORY_OPTIONS.map(c => <option key={c.slug} value={c.slug}>{c.label}</option>)}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-text-muted">Giá từ (₫)</label>
+            <input type="number" min={0} value={form.minPrice} onChange={e => set("minPrice", parseFloat(e.target.value) || 0)}
+              className="mt-1 w-full rounded-lg border border-border bg-bg-elev px-3 py-2 text-sm text-text outline-none focus:border-brand" />
+          </div>
+          <div>
+            <label className="text-xs text-text-muted">Đến (₫, trống = ∞)</label>
+            <input type="number" min={0} value={form.maxPrice ?? ""} onChange={e => set("maxPrice", e.target.value === "" ? null : (parseFloat(e.target.value) || 0))}
+              className="mt-1 w-full rounded-lg border border-border bg-bg-elev px-3 py-2 text-sm text-text outline-none focus:border-brand" />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs text-text-muted">Phí seller (%)</label>
+          <input type="number" min={0} max={50} step={0.5} value={form.sellerFeePercent} onChange={e => set("sellerFeePercent", parseFloat(e.target.value) || 0)}
+            className="mt-1 w-full rounded-lg border border-border bg-bg-elev px-3 py-2 text-sm text-text outline-none focus:border-brand" />
+        </div>
+        <div>
+          <label className="text-xs text-text-muted">Ghi chú</label>
+          <input value={form.note} onChange={e => set("note", e.target.value)}
+            className="mt-1 w-full rounded-lg border border-border bg-bg-elev px-3 py-2 text-sm text-text outline-none focus:border-brand" />
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm text-text-muted hover:bg-bg-elev">Hủy</button>
+          <button type="submit" disabled={saving} className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand/90 disabled:opacity-60">
+            {saving ? "Đang lưu..." : "Lưu"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 export function AdminFeesClient() {
   const { token } = useAuth();
-  const [tab, setTab] = useState<"fee" | "loyalty" | "rewards">("fee");
+  const [tab, setTab] = useState<"fee" | "feetiers" | "loyalty" | "rewards">("fee");
 
   // Fee state
   const [feePercent, setFeePercent] = useState(5);
   const [savingFee, setSavingFee] = useState(false);
+
+  // Fee tiers (phí theo danh mục)
+  const [feeTiers, setFeeTiers] = useState<ApiFeeTier[]>([]);
+  const [tierModal, setTierModal] = useState<(FeeTierForm & { id?: string }) | null | "new">(null);
+  const [tierDelete, setTierDelete] = useState<{ id: string; label: string } | null>(null);
 
   // Loyalty state
   const [loyalty, setLoyalty] = useState<ApiLoyaltyConfig>({
@@ -181,14 +261,16 @@ export function AdminFeesClient() {
     if (!token) return;
     setLoading(true);
     try {
-      const [fee, loy, rws] = await Promise.all([
+      const [fee, loy, rws, tiers] = await Promise.all([
         apiFetch<ApiFeeConfig>("/api/admin/config/fee", { token }),
         apiFetch<ApiLoyaltyConfig>("/api/admin/config/loyalty", { token }),
         apiFetch<ApiLoyaltyReward[]>("/api/admin/config/rewards", { token }),
+        apiFetch<ApiFeeTier[]>("/api/admin/config/fee-tiers", { token }),
       ]);
       setFeePercent(fee.feePercent);
       setLoyalty(loy);
       setRewards(rws);
+      setFeeTiers(tiers);
     } finally {
       setLoading(false);
     }
@@ -205,6 +287,27 @@ export function AdminFeesClient() {
       setFeePercent(updated.feePercent);
       showToast("Đã lưu phí sàn");
     } finally { setSavingFee(false); }
+  }
+
+  async function saveTier(data: FeeTierForm & { id?: string }) {
+    const body = JSON.stringify({
+      categorySlug: data.categorySlug, minPrice: data.minPrice,
+      maxPrice: data.maxPrice, sellerFeePercent: data.sellerFeePercent, note: data.note,
+    });
+    if (data.id) {
+      const updated = await apiFetch<ApiFeeTier>(`/api/admin/config/fee-tiers/${data.id}`, { token, method: "PUT", body });
+      setFeeTiers(ts => ts.map(t => t.id === data.id ? updated : t));
+    } else {
+      const created = await apiFetch<ApiFeeTier>("/api/admin/config/fee-tiers", { token, method: "POST", body });
+      setFeeTiers(ts => [...ts, created]);
+    }
+    showToast("Đã lưu mức phí danh mục");
+  }
+
+  async function deleteTier(id: string) {
+    await apiFetch(`/api/admin/config/fee-tiers/${id}`, { token, method: "DELETE" });
+    setFeeTiers(ts => ts.filter(t => t.id !== id));
+    showToast("Đã xóa mức phí");
   }
 
   async function saveLoyalty() {
@@ -258,10 +361,11 @@ export function AdminFeesClient() {
 
       {/* Tabs */}
       <div className="mb-6 flex gap-1 rounded-xl border border-border bg-bg-elev p-1 w-fit">
-        {(["fee", "loyalty", "rewards"] as const).map(t => {
-          const labels: Record<string, string> = { fee: "Phí sàn", loyalty: "Điểm thưởng", rewards: "Phần thưởng" };
+        {(["fee", "feetiers", "loyalty", "rewards"] as const).map(t => {
+          const labels: Record<string, string> = { fee: "Phí sàn", feetiers: "Phí danh mục", loyalty: "Điểm thưởng", rewards: "Phần thưởng" };
           const icons: Record<string, React.ReactNode> = {
             fee: <Percent className="size-4" />,
+            feetiers: <Percent className="size-4" />,
             loyalty: <Star className="size-4" />,
             rewards: <Gift className="size-4" />,
           };
@@ -359,6 +463,59 @@ export function AdminFeesClient() {
                 ))}
               </div>
               <p className="mt-3 text-[11px] text-text-dim">* Ước tính, chưa tính đơn hủy/hoàn tiền</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Tab: Phí theo danh mục ── */}
+      {!loading && tab === "feetiers" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-text-muted">Phí áp theo danh mục + ngưỡng giá. Dòng đúng danh mục được ưu tiên hơn dòng mặc định; gói Seller áp giảm phí lên trên.</p>
+            <button onClick={() => setTierModal("new")}
+              className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand/90">
+              <Plus className="size-4" /> Thêm mức phí
+            </button>
+          </div>
+          <div className="rounded-2xl border border-border bg-bg-card overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-bg-elev">
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">Danh mục</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">Khoảng giá</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-text-muted">Phí seller</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">Ghi chú</th>
+                    <th className="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {feeTiers.map(t => (
+                    <tr key={t.id} className="hover:bg-bg-elev/50 transition-colors">
+                      <td className="px-4 py-3 font-medium text-text">{categoryLabel(t.categorySlug)}</td>
+                      <td className="px-4 py-3 text-text-muted">
+                        {formatVND(t.minPrice)} → {t.maxPrice != null ? formatVND(t.maxPrice) : "∞"}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="rounded-full bg-brand/10 px-2.5 py-0.5 text-xs font-bold text-brand">{t.sellerFeePercent}%</span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-text-muted">{t.note}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button onClick={() => setTierModal({ id: t.id, categorySlug: t.categorySlug, minPrice: t.minPrice, maxPrice: t.maxPrice ?? null, sellerFeePercent: t.sellerFeePercent, note: t.note ?? "" })}
+                            className="rounded-lg bg-brand/10 px-2.5 py-1.5 text-xs text-brand hover:bg-brand/20"><Edit2 className="size-3.5" /></button>
+                          <button onClick={() => setTierDelete({ id: t.id, label: `${categoryLabel(t.categorySlug)} (${t.sellerFeePercent}%)` })}
+                            className="rounded-lg bg-danger/10 px-2.5 py-1.5 text-xs text-danger hover:bg-danger/20"><Trash2 className="size-3.5" /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {feeTiers.length === 0 && (
+                    <tr><td colSpan={5} className="px-4 py-10 text-center text-sm text-text-muted">Chưa có cấu hình phí danh mục — đang dùng phí sàn mặc định.</td></tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -590,6 +747,20 @@ export function AdminFeesClient() {
           label={deleteTarget.label}
           onClose={() => setDeleteTarget(null)}
           onConfirm={() => deleteReward(deleteTarget.id)}
+        />
+      )}
+      {tierModal !== null && (
+        <FeeTierModal
+          initial={tierModal === "new" ? null : tierModal}
+          onClose={() => setTierModal(null)}
+          onSave={saveTier}
+        />
+      )}
+      {tierDelete && (
+        <ConfirmDelete
+          label={tierDelete.label}
+          onClose={() => setTierDelete(null)}
+          onConfirm={() => deleteTier(tierDelete.id)}
         />
       )}
       {toast && <Toast msg={toast} />}

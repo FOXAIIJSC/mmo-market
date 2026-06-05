@@ -14,4 +14,7 @@ public class KycSubmission : Entity
     public KycStatus Status { get; set; } = KycStatus.Pending;
     public string? RejectionReason { get; set; }
     public DateTime? ReviewedAt { get; set; }
+    // Ảnh CCCD 2 mặt (P2.2) — lưu data URL/đường dẫn tham chiếu (object storage thật để sau)
+    public string? FrontImage { get; set; }
+    public string? BackImage { get; set; }
 }

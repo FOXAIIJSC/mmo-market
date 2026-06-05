@@ -15,6 +15,7 @@ public class Order : Entity
     public decimal Fee { get; set; }
     public decimal Total { get; set; }
     public DateTime? PaidAt { get; set; }
+    public DateTime? DeliverDueAt { get; set; } // hạn seller phải bàn giao (T+2h), dùng cho auto-cancel
     public DateTime? DeliveredAt { get; set; }
     public DateTime? EscrowReleaseAt { get; set; }
     public DateTime? CompletedAt { get; set; }
@@ -35,4 +36,5 @@ public class OrderLine : Entity
     public int Quantity { get; set; }
     public DeliveryMethod Delivery { get; set; }
     public string? DeliveredItemsJson { get; set; }
+    public decimal FeeAmount { get; set; } // phí sàn thu trên line này, khóa tại thời điểm thanh toán (P1.1)
 }

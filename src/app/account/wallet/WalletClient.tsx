@@ -32,6 +32,8 @@ const TXN_TYPE_LABEL: Record<string, string> = {
   Withdraw: "Rút tiền",
   Commission: "Hoa hồng",
   Bonus: "Khuyến mãi",
+  Deposit: "Cọc đăng tin",
+  DepositRefund: "Hoàn cọc",
 };
 
 const TXN_TYPE_ICON: Record<string, React.ReactNode> = {
@@ -41,6 +43,8 @@ const TXN_TYPE_ICON: Record<string, React.ReactNode> = {
   Withdraw: <ArrowUpFromLine className="size-3.5" />,
   Commission: <Gift className="size-3.5" />,
   Bonus: <Star className="size-3.5" />,
+  Deposit: <ArrowUpFromLine className="size-3.5" />,
+  DepositRefund: <ArrowDownLeft className="size-3.5" />,
 };
 
 export function WalletClient() {

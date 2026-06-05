@@ -31,8 +31,35 @@ public static class ConfigKeys
     // Transaction rules
     public const string MinWithdraw        = "min_withdraw";
     public const string MaxWithdraw        = "max_withdraw";
+    // Giới hạn nạp/rút theo ngày theo cấp tài khoản (P1.3, §7.2). 0 hoặc âm = không giới hạn.
+    public const string LimitDepositUnverified  = "limit_deposit_unverified";
+    public const string LimitWithdrawUnverified = "limit_withdraw_unverified";
+    public const string LimitDepositKyc         = "limit_deposit_kyc";
+    public const string LimitWithdrawKyc        = "limit_withdraw_kyc";
+    public const string LimitDepositSeller      = "limit_deposit_seller";
+    public const string LimitWithdrawSeller     = "limit_withdraw_seller";
+    public const string LimitDepositVip         = "limit_deposit_vip";
+    public const string LimitWithdrawVip        = "limit_withdraw_vip";
     public const string EscrowReleaseDays  = "escrow_release_days";
+    public const string DeliverWindowHours = "deliver_window_hours";
     public const string DisputeSlaHours    = "dispute_sla_hours";
+    // Cọc đăng tin của seller (P1.4, §7). 0 = không giới hạn trên.
+    public const string ListingDepositEnabled = "listing_deposit_enabled";
+    public const string ListingDepositPercent = "listing_deposit_percent";
+    public const string ListingDepositMin     = "listing_deposit_min";
+    public const string ListingDepositMax     = "listing_deposit_max";
+    // Trust Score (P2.1, §8) — delta điểm uy tín
+    public const string TrustStart           = "trust_start";
+    public const string TrustComplete5Star   = "trust_complete_5star";
+    public const string TrustCompleteNoReview = "trust_complete_noreview";
+    public const string TrustReviewLow       = "trust_review_low";
+    public const string TrustDisputeLost     = "trust_dispute_lost";
+    public const string TrustLateDelivery    = "trust_late_delivery";
+    public const string TrustViolation       = "trust_violation";
+    public const string TrustClean30dBonus   = "trust_clean_30d_bonus";
+    // Chống lạm dụng tranh chấp (P2.3) & partial refund mặc định (P2.4)
+    public const string DisputeMaxPerMonth   = "dispute_max_per_month";
+    public const string PartialRefundDefaultPercent = "partial_refund_default_percent";
     public const string KycRequiredToSell  = "kyc_required_to_sell";
 
     // Payment

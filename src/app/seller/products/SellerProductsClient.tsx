@@ -277,6 +277,13 @@ export function SellerProductsClient() {
                         <div className="text-xs text-text-muted">
                           {p.delivery === "Auto" ? "⚡ Auto" : p.delivery} · BH {p.warrantyDays}d · Kho {p.inventoryAvailable}
                         </div>
+                        {p.depositAmount > 0 && p.depositStatus !== "None" && (
+                          <div className="mt-0.5 text-[11px]">
+                            {p.depositStatus === "Held" && <span className="text-warning">🔒 Cọc {formatVND(p.depositAmount)}</span>}
+                            {p.depositStatus === "Refunded" && <span className="text-text-dim">Đã hoàn cọc {formatVND(p.depositAmount)}</span>}
+                            {p.depositStatus === "Forfeited" && <span className="text-danger">Mất cọc {formatVND(p.depositAmount)}</span>}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </td>

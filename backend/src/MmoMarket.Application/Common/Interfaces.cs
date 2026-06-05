@@ -30,6 +30,10 @@ public interface IAppDbContext
     DbSet<FlashSale> FlashSales { get; }
     DbSet<SiteConfig> SiteConfigs { get; }
     DbSet<LoyaltyReward> LoyaltyRewards { get; }
+    DbSet<AuditLog> AuditLogs { get; }
+    DbSet<PaymentTransaction> PaymentTransactions { get; }
+    DbSet<FeeConfig> FeeConfigs { get; }
+    DbSet<SellerPlan> SellerPlans { get; }
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }
 

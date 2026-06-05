@@ -14,38 +14,38 @@ import type { ApiAdminOrder } from "@/lib/apiTypes";
 import { formatRelativeTime, formatVND } from "@/lib/format";
 
 // ── Config ────────────────────────────────────────────────────────────────
-type StatusTab = "all" | "PendingPayment" | "Paid" | "Processing" | "Delivered" | "Completed" | "Dispute" | "Refunded" | "Cancelled";
+type StatusTab = "all" | "PendingPayment" | "EscrowLocked" | "Delivering" | "Checking" | "Completed" | "Disputed" | "Refunded" | "Cancelled";
 
 const STATUS_TABS: { v: StatusTab; label: string }[] = [
   { v: "all",            label: "Tất cả"       },
   { v: "PendingPayment", label: "Chờ TT"       },
-  { v: "Paid",           label: "Đã TT"        },
-  { v: "Processing",     label: "Đang xử lý"   },
-  { v: "Delivered",      label: "Đã giao"      },
+  { v: "EscrowLocked",   label: "Đã vào escrow" },
+  { v: "Delivering",     label: "Đang bàn giao" },
+  { v: "Checking",       label: "Đang kiểm tra" },
   { v: "Completed",      label: "Hoàn thành"   },
-  { v: "Dispute",        label: "Tranh chấp"   },
+  { v: "Disputed",       label: "Tranh chấp"   },
   { v: "Refunded",       label: "Hoàn tiền"    },
   { v: "Cancelled",      label: "Đã hủy"       },
 ];
 
 const STATUS_TONE: Record<string, "success" | "warning" | "danger" | "brand" | "accent" | "muted"> = {
   PendingPayment: "warning",
-  Paid:           "brand",
-  Processing:     "accent",
-  Delivered:      "success",
+  EscrowLocked:   "brand",
+  Delivering:     "accent",
+  Checking:       "success",
   Completed:      "success",
-  Dispute:        "danger",
+  Disputed:       "danger",
   Refunded:       "warning",
   Cancelled:      "muted",
 };
 
 const STATUS_VI: Record<string, string> = {
   PendingPayment: "Chờ thanh toán",
-  Paid:           "Đã thanh toán",
-  Processing:     "Đang xử lý",
-  Delivered:      "Đã giao",
+  EscrowLocked:   "Đã vào escrow",
+  Delivering:     "Đang bàn giao",
+  Checking:       "Đang kiểm tra",
   Completed:      "Hoàn thành",
-  Dispute:        "Tranh chấp",
+  Disputed:       "Tranh chấp",
   Refunded:       "Đã hoàn tiền",
   Cancelled:      "Đã hủy",
 };
@@ -53,12 +53,12 @@ const STATUS_VI: Record<string, string> = {
 // Actions allowed per status
 const ACTIONS: Record<string, { label: string; newStatus: string; tone: "danger" | "warning" | "success" }[]> = {
   PendingPayment: [{ label: "Hủy đơn",    newStatus: "Cancelled",  tone: "danger"  }],
-  Paid:           [{ label: "Hoàn tiền",  newStatus: "Refunded",   tone: "warning" },
+  EscrowLocked:   [{ label: "Hoàn tiền",  newStatus: "Refunded",   tone: "warning" },
                    { label: "Hủy đơn",    newStatus: "Cancelled",  tone: "danger"  }],
-  Processing:     [{ label: "Hoàn tiền",  newStatus: "Refunded",   tone: "warning" }],
-  Delivered:      [{ label: "Xác nhận hoàn thành", newStatus: "Completed", tone: "success" },
+  Delivering:     [{ label: "Hoàn tiền",  newStatus: "Refunded",   tone: "warning" }],
+  Checking:       [{ label: "Xác nhận hoàn thành", newStatus: "Completed", tone: "success" },
                    { label: "Hoàn tiền",  newStatus: "Refunded",   tone: "warning" }],
-  Dispute:        [{ label: "Hoàn tiền",  newStatus: "Refunded",   tone: "warning" },
+  Disputed:       [{ label: "Hoàn tiền",  newStatus: "Refunded",   tone: "warning" },
                    { label: "Đóng tranh chấp → Hoàn thành", newStatus: "Completed", tone: "success" }],
 };
 
@@ -303,8 +303,8 @@ export function AdminOrdersClient() {
   const stats = [
     { label: "Tổng đơn",     value: orders.length,            color: "bg-accent/10 text-accent"   },
     { label: "Hoàn thành",   value: byStatus("Completed"),    color: "bg-success/10 text-success" },
-    { label: "Tranh chấp",   value: byStatus("Dispute"),      color: "bg-danger/10 text-danger"   },
-    { label: "Chờ xử lý",   value: byStatus("Processing") + byStatus("Paid") + byStatus("PendingPayment"), color: "bg-warning/10 text-warning" },
+    { label: "Tranh chấp",   value: byStatus("Disputed"),     color: "bg-danger/10 text-danger"   },
+    { label: "Chờ xử lý",   value: byStatus("Delivering") + byStatus("EscrowLocked") + byStatus("PendingPayment"), color: "bg-warning/10 text-warning" },
   ];
 
   return (

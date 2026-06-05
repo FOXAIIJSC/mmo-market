@@ -14,7 +14,9 @@ public class WalletService
 {
     private readonly IAppDbContext _db;
     private readonly NotificationService _notify;
-    public WalletService(IAppDbContext db, NotificationService notify) { _db = db; _notify = notify; }
+    private readonly TransactionLimitService _limits;
+    public WalletService(IAppDbContext db, NotificationService notify, TransactionLimitService limits)
+    { _db = db; _notify = notify; _limits = limits; }
 
     public async Task<WalletStateDto> GetAsync(Guid userId, CancellationToken ct)
     {
@@ -26,7 +28,7 @@ public class WalletService
             .Take(50)
             .ToListAsync(ct);
         var heldTotals = await _db.Orders
-            .Where(o => o.BuyerId == userId && (o.Status == OrderStatus.Paid || o.Status == OrderStatus.Processing || o.Status == OrderStatus.Delivered))
+            .Where(o => o.BuyerId == userId && (o.Status == OrderStatus.EscrowLocked || o.Status == OrderStatus.Delivering || o.Status == OrderStatus.Checking))
             .Select(o => o.Total)
             .ToListAsync(ct);
         var held = heldTotals.Sum();
@@ -37,6 +39,7 @@ public class WalletService
     public async Task<WalletStateDto> TopupAsync(Guid userId, TopupDto dto, CancellationToken ct)
     {
         if (dto.Amount <= 0) throw new AppException("Số tiền không hợp lệ");
+        await _limits.EnsureDepositAllowedAsync(userId, dto.Amount, ct);
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct)
             ?? throw new AppException("User không tồn tại", 404);
         user.WalletBalance += dto.Amount;

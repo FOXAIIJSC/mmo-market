@@ -1,7 +1,9 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MmoMarket.Application.Orders;
 using MmoMarket.Application.Payments;
+using MmoMarket.Domain.Enums;
 
 namespace MmoMarket.Api.Controllers;
 
@@ -14,9 +16,10 @@ public class PaymentController : ControllerBase
     private readonly VNPayService _vnpay;
     private readonly VietQrService _vietqr;
     private readonly OrderService _order;
+    private readonly PaymentLogService _payLog;
 
-    public PaymentController(MoMoService momo, ZaloPayService zalo, VNPayService vnpay, VietQrService vietqr, OrderService order)
-    { _momo = momo; _zalo = zalo; _vnpay = vnpay; _vietqr = vietqr; _order = order; }
+    public PaymentController(MoMoService momo, ZaloPayService zalo, VNPayService vnpay, VietQrService vietqr, OrderService order, PaymentLogService payLog)
+    { _momo = momo; _zalo = zalo; _vnpay = vnpay; _vietqr = vietqr; _order = order; _payLog = payLog; }
 
     /// <summary>
     /// MoMo IPN — server-to-server callback (JSON body).
@@ -29,7 +32,11 @@ public class PaymentController : ControllerBase
             return BadRequest(new { message = "Invalid signature" });
 
         if (dto.ResultCode == 0 && Guid.TryParse(dto.OrderId, out var orderId))
+        {
+            await _payLog.RecordAsync("momo", dto.TransId.ToString(), PaymentMethod.Momo,
+                dto.Amount, orderId, "success", JsonSerializer.Serialize(dto), ct);
             await _order.ConfirmExternalPaymentAsync(orderId, ct);
+        }
 
         return Ok(new { message = "OK" });
     }
@@ -49,7 +56,12 @@ public class PaymentController : ControllerBase
         {
             var orderId = ZaloPayService.ParseOrderIdFromIpn(data);
             if (orderId.HasValue)
+            {
+                var (transId, amount) = ZaloPayService.ParseTransInfoFromIpn(data);
+                await _payLog.RecordAsync("zalopay", transId, PaymentMethod.ZaloPay,
+                    amount, orderId.Value, "success", data, ct);
                 await _order.ConfirmExternalPaymentAsync(orderId.Value, ct);
+            }
         }
 
         return Ok(new { return_code = 1, return_message = "Success" });
@@ -75,6 +87,10 @@ public class PaymentController : ControllerBase
             var orderId = VNPayService.ParseOrderIdFromIpn(queryParams);
             if (orderId.HasValue)
             {
+                var vnpTxnNo = queryParams.GetValueOrDefault("vnp_TransactionNo", "");
+                decimal vnpAmount = decimal.TryParse(queryParams.GetValueOrDefault("vnp_Amount", "0"), out var a) ? a / 100m : 0m;
+                await _payLog.RecordAsync("vnpay", vnpTxnNo, PaymentMethod.VnPay,
+                    vnpAmount, orderId.Value, "success", JsonSerializer.Serialize(queryParams), ct);
                 var confirmed = await _order.ConfirmExternalPaymentAsync(orderId.Value, ct);
                 if (!confirmed)
                     return Ok(new { RspCode = "02", Message = "Order already confirmed" });
@@ -105,6 +121,8 @@ public class PaymentController : ControllerBase
         if (!string.Equals(dto.TransferType, "in", StringComparison.OrdinalIgnoreCase))
             return Ok(new { success = true });
 
+        await _payLog.RecordAsync("sepay", dto.ReferenceCode ?? dto.Id.ToString(), PaymentMethod.VietQr,
+            dto.TransferAmount, null, "success", JsonSerializer.Serialize(dto), ct);
         await _order.ConfirmExternalPaymentByTransferNoteAsync(dto.Content ?? "", ct);
 
         return Ok(new { success = true });

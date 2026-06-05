@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MmoMarket.Application.Common;
+using MmoMarket.Application.Sellers;
 using MmoMarket.Domain.Entities;
 using MmoMarket.Domain.Enums;
 
@@ -12,7 +13,8 @@ public record OwnReviewDto(Guid Id, Guid ProductId, string ProductTitle, string?
 public class ReviewService
 {
     private readonly IAppDbContext _db;
-    public ReviewService(IAppDbContext db) => _db = db;
+    private readonly TrustScoreService _trust;
+    public ReviewService(IAppDbContext db, TrustScoreService trust) { _db = db; _trust = trust; }
 
     public async Task<OwnReviewDto> CreateAsync(Guid userId, ReviewCreateDto dto, CancellationToken ct)
     {
@@ -21,7 +23,7 @@ public class ReviewService
 
         var order = await _db.Orders.Include(o => o.Lines).FirstOrDefaultAsync(o => o.Id == dto.OrderId && o.BuyerId == userId, ct)
             ?? throw new AppException("Không tìm thấy đơn", 404);
-        if (order.Status != OrderStatus.Completed && order.Status != OrderStatus.Delivered)
+        if (order.Status != OrderStatus.Completed && order.Status != OrderStatus.Checking)
             throw new AppException("Chỉ review đơn đã giao/hoàn thành");
         if (!order.Lines.Any(l => l.ProductId == dto.ProductId))
             throw new AppException("Sản phẩm không thuộc đơn này");
@@ -64,6 +66,9 @@ public class ReviewService
                 seller.ReviewCount = sellerReviews.Count;
                 seller.Rating = sellerReviews.Count == 0 ? 0 : Math.Round(sellerReviews.Average(r => (double)r.Rating), 2);
             }
+            // Trust Score: chỉ tính khi đánh giá mới (P2.1)
+            if (existing == null)
+                await _trust.OnReviewAsync(product.SellerId, dto.Rating, ct);
         }
 
         await _db.SaveChangesAsync(ct);

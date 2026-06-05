@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using MmoMarket.Api.Auth;
+using MmoMarket.Api.BackgroundJobs;
 using MmoMarket.Api.Middleware;
 using MmoMarket.Application;
 using MmoMarket.Application.Common;
@@ -24,6 +25,7 @@ builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddHttpClient();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApplication();
+builder.Services.AddHostedService<OrderEscrowWorker>();
 
 var jwt = builder.Configuration.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(opt =>

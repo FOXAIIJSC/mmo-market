@@ -14,12 +14,12 @@ import { formatVND } from "@/lib/format";
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 const STATUS_VI: Record<string, string> = {
-  PendingPayment: "Chờ TT", Paid: "Đã TT", Processing: "Đang xử lý",
-  Delivered: "Đã giao", Completed: "Hoàn thành", Dispute: "Tranh chấp",
+  PendingPayment: "Chờ TT", EscrowLocked: "Đã vào escrow", Delivering: "Đang bàn giao",
+  Checking: "Đang kiểm tra", Completed: "Hoàn thành", Disputed: "Tranh chấp",
   Refunded: "Hoàn tiền", Cancelled: "Đã hủy",
   Buyer: "Người mua", Seller: "Người bán", Ctv: "CTV", Admin: "Admin", SuperAdmin: "Super Admin",
   None: "Chưa KYC", Pending: "Chờ duyệt", Approved: "Đã KYC", Rejected: "Bị từ chối",
-  Draft: "Nháp", Active: "Đang bán", Hidden: "Ẩn", OutOfStock: "Hết hàng",
+  Draft: "Nháp", Active: "Đang bán", Hidden: "Ẩn", OutOfStock: "Hết hàng", Banned: "Đã khóa",
   Open: "Mở", Investigating: "Đang xử lý", Resolved: "Đã giải quyết", Closed: "Đóng",
   Wallet: "Ví nội bộ", VietQr: "VietQR", Momo: "MoMo", ZaloPay: "ZaloPay",
   VnPay: "VNPay", Usdt: "USDT", Btc: "BTC",

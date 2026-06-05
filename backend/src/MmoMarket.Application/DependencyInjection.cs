@@ -42,6 +42,11 @@ public static class DependencyInjection
         services.AddScoped<VNPayService>();
         services.AddScoped<VietQrService>();
         services.AddScoped<UsdtService>();
+        services.AddScoped<PaymentLogService>();
+        services.AddScoped<SellerPlanService>();
+        services.AddScoped<Fees.FeeService>();
+        services.AddScoped<TransactionLimitService>();
+        services.AddScoped<TrustScoreService>();
         return services;
     }
 }

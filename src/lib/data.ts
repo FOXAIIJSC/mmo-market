@@ -719,7 +719,7 @@ export const orders: Order[] = [
   {
     id: "MMK-1042913",
     buyerName: "Tôi",
-    status: "DELIVERED",
+    status: "CHECKING",
     paymentMethod: "vietqr",
     total: 1290000,
     fee: 0,
@@ -742,7 +742,7 @@ export const orders: Order[] = [
   {
     id: "MMK-1042966",
     buyerName: "Tôi",
-    status: "PROCESSING",
+    status: "DELIVERING",
     paymentMethod: "wallet",
     total: 2490000,
     fee: 0,
@@ -762,7 +762,7 @@ export const orders: Order[] = [
   {
     id: "MMK-1043001",
     buyerName: "Tôi",
-    status: "DISPUTE",
+    status: "DISPUTED",
     paymentMethod: "vnpay",
     total: 690000,
     fee: 0,

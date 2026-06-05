@@ -7,6 +7,7 @@ import {
   DollarSign,
   Loader2,
   Package,
+  ShieldCheck,
   ShoppingBag,
   Star,
   Users,
@@ -24,11 +25,11 @@ import { formatNumber, formatRelativeTime, formatVND } from "@/lib/format";
 
 const statusMap: Record<string, OrderStatus> = {
   PendingPayment: "PENDING_PAYMENT",
-  Paid: "PAID",
-  Processing: "PROCESSING",
-  Delivered: "DELIVERED",
+  EscrowLocked: "ESCROW_LOCKED",
+  Delivering: "DELIVERING",
+  Checking: "CHECKING",
   Completed: "COMPLETED",
-  Dispute: "DISPUTE",
+  Disputed: "DISPUTED",
   Refunded: "REFUNDED",
   Cancelled: "CANCELLED",
 };
@@ -140,6 +141,13 @@ export function SellerDashboardClient() {
           icon={<Box className="size-4" />}
           tone="accent"
         />
+        <Stat
+          label="Điểm uy tín"
+          value={`${dash.trustScore}/100`}
+          delta={dash.trustScore >= 80 ? "Uy tín tốt" : dash.trustScore >= 50 ? "Cần cải thiện" : "Rủi ro cao"}
+          icon={<ShieldCheck className="size-4" />}
+          tone={dash.trustScore >= 80 ? "success" : dash.trustScore >= 50 ? "warning" : "danger"}
+        />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
@@ -232,7 +240,7 @@ export function SellerDashboardClient() {
                   <td className="px-5 py-3 line-clamp-1 max-w-xs text-text-muted">{o.productTitle}</td>
                   <td className="px-5 py-3 text-text-muted">{o.buyerDisplayName}</td>
                   <td className="px-5 py-3">
-                    <OrderStatusBadge status={statusMap[o.status] ?? "PROCESSING"} />
+                    <OrderStatusBadge status={statusMap[o.status] ?? "DELIVERING"} />
                   </td>
                   <td className="num px-5 py-3 text-right font-semibold text-text">{formatVND(o.lineTotal)}</td>
                   <td className="px-5 py-3 text-right text-xs text-text-muted">

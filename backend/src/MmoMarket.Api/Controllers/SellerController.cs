@@ -13,8 +13,10 @@ public class SellerController : ControllerBase
 {
     private readonly SellerService _svc;
     private readonly MessageService _msg;
+    private readonly SellerPlanService _plans;
     private readonly ICurrentUser _user;
-    public SellerController(SellerService svc, MessageService msg, ICurrentUser user) { _svc = svc; _msg = msg; _user = user; }
+    public SellerController(SellerService svc, MessageService msg, SellerPlanService plans, ICurrentUser user)
+    { _svc = svc; _msg = msg; _plans = plans; _user = user; }
 
     private Guid Uid => _user.UserId ?? throw new AppException("Unauthorized", 401);
 
@@ -97,4 +99,17 @@ public class SellerController : ControllerBase
 
     [HttpPost("withdraws")]
     public Task<WithdrawDto> CreateWithdraw([FromBody] WithdrawCreateDto dto, CancellationToken ct) => _svc.CreateWithdrawAsync(Uid, dto, ct);
+
+    // ── Gói thành viên (P1.2) ───────────────────────────────────────────────
+    [HttpGet("plans")]
+    [AllowAnonymous]
+    public Task<SellerPlanDto[]> Plans(CancellationToken ct) => _plans.ListPlansAsync(ct);
+
+    [HttpGet("plan")]
+    public Task<CurrentPlanDto> MyPlan(CancellationToken ct) => _plans.GetMyPlanAsync(Uid, ct);
+
+    public record SubscribePlanDto(string PlanCode);
+    [HttpPost("plan/subscribe")]
+    public Task<CurrentPlanDto> Subscribe([FromBody] SubscribePlanDto dto, CancellationToken ct) =>
+        _plans.SubscribeAsync(Uid, dto.PlanCode, ct);
 }

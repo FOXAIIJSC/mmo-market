@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Check, Loader2, X } from "lucide-react";
+import { Ban, Check, Loader2, X } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -69,6 +69,21 @@ export function AdminProductsClient() {
     if (!token || !reason) return;
     try {
       await apiFetch<ApiAdminProduct>(`/api/admin/products/${id}/reject`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ reason }),
+      });
+      await reload(token, tab);
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  };
+
+  const onBan = async (id: string) => {
+    const reason = prompt("Lý do khóa vĩnh viễn (ban) sản phẩm? Seller sẽ bị trừ điểm uy tín.");
+    if (!token || !reason) return;
+    try {
+      await apiFetch<ApiAdminProduct>(`/api/admin/products/${id}/ban`, {
         method: "POST",
         token,
         body: JSON.stringify({ reason }),
@@ -160,6 +175,11 @@ export function AdminProductsClient() {
                       {p.status !== "Rejected" && (
                         <Button size="sm" variant="danger" className="!h-8 !w-8 !px-0" onClick={() => onReject(p.id)} title="Từ chối">
                           <X className="size-3.5" />
+                        </Button>
+                      )}
+                      {p.status !== "Banned" && (
+                        <Button size="sm" variant="outline" className="!h-8 !w-8 !px-0 !text-danger" onClick={() => onBan(p.id)} title="Khóa vĩnh viễn (ban)">
+                          <Ban className="size-3.5" />
                         </Button>
                       )}
                     </div>

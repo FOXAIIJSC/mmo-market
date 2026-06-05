@@ -6,7 +6,7 @@ import {
   AlertCircle, ArrowRight, Award, BadgeCheck,
   CheckCircle2, ChevronRight, Clock, Loader2,
   Lock, PackageCheck, ShieldCheck, Star,
-  TrendingUp, User, Wallet, X,
+  TrendingUp, Upload, User, Wallet, X,
 } from "lucide-react";
 import { SiteShell } from "@/components/SiteShell";
 import { Button } from "@/components/ui/Button";
@@ -48,8 +48,18 @@ export function OnboardingClient() {
 
   // KYC form
   const [form, setForm] = useState({ fullName: "", idNumber: "", address: "", phoneNumber: "" });
+  const [images, setImages] = useState<{ front: string | null; back: string | null }>({ front: null, back: null });
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const onPickImage = (side: "front" | "back") => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 3 * 1024 * 1024) { setErr("Ảnh tối đa 3MB"); return; }
+    const reader = new FileReader();
+    reader.onload = () => setImages((p) => ({ ...p, [side]: reader.result as string }));
+    reader.readAsDataURL(file);
+  };
 
   const loadKyc = useCallback(async () => {
     if (!token) { setStatusLoading(false); return; }
@@ -77,7 +87,7 @@ export function OnboardingClient() {
     try {
       await apiFetch("/api/kyc", {
         method: "POST", token,
-        body: JSON.stringify({ fullName, idNumber, address, phoneNumber }),
+        body: JSON.stringify({ fullName, idNumber, address, phoneNumber, frontImage: images.front, backImage: images.back }),
       });
       await refresh();
       setKycStatus("pending");
@@ -287,6 +297,29 @@ export function OnboardingClient() {
               {field("idNumber",    "Số CMND / CCCD",     "012345678901",               <Lock className="size-4" />)}
               {field("phoneNumber", "Số điện thoại",      "0912 345 678",               <ShieldCheck className="size-4" />)}
               {field("address",     "Địa chỉ thường trú", "123 Đường ABC, Q.1, TP.HCM", <AlertCircle className="size-4" />)}
+            </div>
+
+            <div className="rounded-2xl border border-border bg-bg-card p-5">
+              <p className="text-sm font-semibold text-text">Ảnh CCCD/CMND (2 mặt)</p>
+              <p className="mt-0.5 text-xs text-text-muted">Tải ảnh rõ nét, tối đa 3MB mỗi mặt.</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                {([["front", "Mặt trước"], ["back", "Mặt sau"]] as const).map(([side, label]) => (
+                  <label key={side} className="group cursor-pointer">
+                    <span className="text-xs text-text-muted">{label}</span>
+                    <div className="mt-1 flex aspect-[3/2] items-center justify-center overflow-hidden rounded-xl border border-dashed border-border bg-bg-elev transition group-hover:border-brand">
+                      {images[side] ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={images[side]!} alt={label} className="size-full object-cover" />
+                      ) : (
+                        <span className="flex flex-col items-center gap-1 text-text-muted">
+                          <Upload className="size-6" /><span className="text-xs">Chọn ảnh</span>
+                        </span>
+                      )}
+                    </div>
+                    <input type="file" accept="image/*" className="hidden" onChange={onPickImage(side)} />
+                  </label>
+                ))}
+              </div>
             </div>
 
             <div className="rounded-xl border border-brand/20 bg-brand/5 p-4 text-xs text-text-muted">

@@ -34,6 +34,10 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<FlashSale> FlashSales => Set<FlashSale>();
     public DbSet<SiteConfig> SiteConfigs => Set<SiteConfig>();
     public DbSet<LoyaltyReward> LoyaltyRewards => Set<LoyaltyReward>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
+    public DbSet<FeeConfig> FeeConfigs => Set<FeeConfig>();
+    public DbSet<SellerPlan> SellerPlans => Set<SellerPlan>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -63,6 +67,7 @@ public class AppDbContext : DbContext, IAppDbContext
             e.HasIndex(x => x.Slug).IsUnique();
             e.Property(x => x.Price).HasColumnType("decimal(18,2)");
             e.Property(x => x.ComparePrice).HasColumnType("decimal(18,2)");
+            e.Property(x => x.DepositAmount).HasColumnType("decimal(18,2)");
             e.HasOne(x => x.Category).WithMany(c => c.Products).HasForeignKey(x => x.CategorySlug).HasPrincipalKey(c => c.Slug);
             e.HasOne(x => x.Seller).WithMany(s => s.Products).HasForeignKey(x => x.SellerId);
         });
@@ -79,6 +84,7 @@ public class AppDbContext : DbContext, IAppDbContext
         b.Entity<OrderLine>(e =>
         {
             e.Property(x => x.UnitPrice).HasColumnType("decimal(18,2)");
+            e.Property(x => x.FeeAmount).HasColumnType("decimal(18,2)");
             e.HasOne(x => x.Order).WithMany(o => o.Lines).HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -183,10 +189,45 @@ public class AppDbContext : DbContext, IAppDbContext
             e.HasIndex(x => x.Position);
             e.Property(x => x.VoucherAmount).HasColumnType("decimal(18,2)");
         });
+
+        b.Entity<AuditLog>(e =>
+        {
+            e.HasIndex(x => x.CreatedAt);
+            e.HasIndex(x => new { x.EntityType, x.EntityId });
+            e.Property(x => x.Amount).HasColumnType("decimal(18,2)");
+        });
+
+        b.Entity<PaymentTransaction>(e =>
+        {
+            e.HasIndex(x => new { x.Provider, x.ProviderTxnId }).IsUnique();
+            e.HasIndex(x => x.OrderId);
+            e.Property(x => x.Amount).HasColumnType("decimal(18,2)");
+        });
+
+        b.Entity<FeeConfig>(e =>
+        {
+            e.HasIndex(x => new { x.CategorySlug, x.MinPrice });
+            e.Property(x => x.MinPrice).HasColumnType("decimal(18,2)");
+            e.Property(x => x.MaxPrice).HasColumnType("decimal(18,2)");
+            e.Property(x => x.SellerFeePercent).HasColumnType("decimal(9,4)");
+        });
+
+        b.Entity<SellerPlan>(e =>
+        {
+            e.HasIndex(x => x.Code).IsUnique();
+            e.Property(x => x.PricePerMonth).HasColumnType("decimal(18,2)");
+            e.Property(x => x.FeeDiscountPercent).HasColumnType("decimal(9,4)");
+        });
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
+        // AuditLog là bất biến: chỉ cho phép thêm mới, cấm sửa/xóa.
+        foreach (var audit in ChangeTracker.Entries<AuditLog>())
+        {
+            if (audit.State is EntityState.Modified or EntityState.Deleted)
+                throw new InvalidOperationException("AuditLog là bất biến, không thể sửa hoặc xóa.");
+        }
         foreach (var entry in ChangeTracker.Entries<Entity>())
         {
             if (entry.State == EntityState.Modified) entry.Entity.UpdatedAt = DateTime.UtcNow;

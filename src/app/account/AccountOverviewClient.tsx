@@ -14,11 +14,11 @@ import { formatRelativeTime, formatVND } from "@/lib/format";
 
 const statusMap: Record<string, OrderStatus> = {
   PendingPayment: "PENDING_PAYMENT",
-  Paid: "PAID",
-  Processing: "PROCESSING",
-  Delivered: "DELIVERED",
+  EscrowLocked: "ESCROW_LOCKED",
+  Delivering: "DELIVERING",
+  Checking: "CHECKING",
   Completed: "COMPLETED",
-  Dispute: "DISPUTE",
+  Disputed: "DISPUTED",
   Refunded: "REFUNDED",
   Cancelled: "CANCELLED",
 };
@@ -63,7 +63,7 @@ export function AccountOverviewClient() {
   const recentOrders = orders.slice(0, 4);
   const recentTxns = (wallet?.transactions || []).slice(0, 4);
   const completed = orders.filter((o) => o.status === "Completed").length;
-  const dispute = orders.filter((o) => o.status === "Dispute").length;
+  const dispute = orders.filter((o) => o.status === "Disputed").length;
 
   return (
     <>
