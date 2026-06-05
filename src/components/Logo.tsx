@@ -1,5 +1,7 @@
+import Image from "next/image";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
+import logoMmoMarket from "@/assets/images/logo_mmo_market.png";
 
 export function Logo({ className }: { className?: string }) {
   return (
@@ -10,12 +12,12 @@ export function Logo({ className }: { className?: string }) {
         className,
       )}
     >
-      <span
-        aria-hidden
-        className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-brand to-accent shadow-lg shadow-brand/30"
-      >
-        <span className="text-base font-black text-white">M</span>
-      </span>
+      <Image
+        src={logoMmoMarket}
+        alt="MMO Market"
+        priority
+        className="h-9 w-9 rounded-xl object-contain shadow-lg shadow-brand/30"
+      />
       <span className="leading-tight">
         <span className="block text-xs uppercase tracking-widest text-text-muted">
           Sàn
